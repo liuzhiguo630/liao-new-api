@@ -45,7 +45,7 @@ func Relay(c *gin.Context) {
 	openaiErr := relayHandler(c, relayMode)
 	c.Set("use_channel", []string{fmt.Sprintf("%d", channelId)})
 	if openaiErr != nil {
-		go processChannelError(c, channelId, openaiErr)
+		go processChannelError(c, channelId, originalModel, openaiErr)
 	} else {
 		retryTimes = 0
 	}
@@ -66,7 +66,7 @@ func Relay(c *gin.Context) {
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 		openaiErr = relayHandler(c, relayMode)
 		if openaiErr != nil {
-			go processChannelError(c, channelId, openaiErr)
+			go processChannelError(c, channelId, originalModel, openaiErr)
 		}
 	}
 	useChannel := c.GetStringSlice("use_channel")
@@ -125,9 +125,9 @@ func shouldRetry(c *gin.Context, channelId int, openaiErr *dto.OpenAIErrorWithSt
 	return true
 }
 
-func processChannelError(c *gin.Context, channelId int, err *dto.OpenAIErrorWithStatusCode) {
+func processChannelError(c *gin.Context, channelId int, originalModel string, err *dto.OpenAIErrorWithStatusCode) {
 	autoBan := c.GetBool("auto_ban")
-	common.LogError(c.Request.Context(), fmt.Sprintf("relay error (channel #%d, status code: %d): %s", channelId, err.StatusCode, err.Error.Message))
+	common.LogError(c.Request.Context(), fmt.Sprintf("relay error (channel #%d, originalModel %s, status code: %d): %s", channelId, originalModel, err.StatusCode, err.Error.Message))
 	if service.ShouldDisableChannel(&err.Error, err.StatusCode) && autoBan {
 		channelName := c.GetString("channel_name")
 		service.DisableChannel(channelId, channelName, err.Error.Message)
