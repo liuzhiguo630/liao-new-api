@@ -17,6 +17,7 @@ import (
 	"one-api/relay/constant"
 	"one-api/service"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,7 +63,12 @@ func testChannel(channel *model.Channel, testModel string) (err error, openaiErr
 		if channel.TestModel != nil && *channel.TestModel != "" {
 			testModel = *channel.TestModel
 		} else {
-			testModel = adaptor.GetModelList()[0]
+			testModel = strings.Split(channel.Models, ",")[0]
+			if strings.TrimSpace(channel.GetModelMapping()) != "" {
+				modelMap := make(map[string]string)
+				_ = json.Unmarshal([]byte(channel.GetModelMapping()), &modelMap)
+				testModel = modelMap[testModel]
+			}
 		}
 	} else {
 		modelMapping := *channel.ModelMapping
