@@ -21,6 +21,7 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		relayV1Router.POST("/completions", controller.Relay)
 		relayV1Router.POST("/chat/completions", controller.Relay)
+		relayV1Router.POST("/chat/completions/calc-tokens", relay.TokenCounterHelper)
 		relayV1Router.POST("/edits", controller.Relay)
 		relayV1Router.POST("/images/generations", controller.Relay)
 		relayV1Router.POST("/images/edits", controller.RelayNotImplemented)

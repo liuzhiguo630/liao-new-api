@@ -64,6 +64,28 @@ func getAndValidateTextRequest(c *gin.Context, relayInfo *relaycommon.RelayInfo)
 	return textRequest, nil
 }
 
+func TokenCounterHelper(c *gin.Context) {
+	relayInfo := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeChatCompletions,
+	}
+	// get & validate textRequest 获取并验证文本请求
+	textRequest, err := getAndValidateTextRequest(c, relayInfo)
+	if err != nil {
+		common.LogError(c, fmt.Sprintf("getAndValidateTextRequest failed: %s", err.Error()))
+		return
+	}
+
+	promptTokens, err := getPromptTokens(textRequest, relayInfo)
+	if err != nil {
+		common.LogError(c, fmt.Sprintf("getPromptTokens failed: %s", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"prompt_tokens": promptTokens,
+	})
+
+}
+
 func TextHelper(c *gin.Context) *dto.OpenAIErrorWithStatusCode {
 
 	relayInfo := relaycommon.GenRelayInfo(c)
