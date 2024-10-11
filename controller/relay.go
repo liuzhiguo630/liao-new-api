@@ -111,7 +111,7 @@ func Relay(c *gin.Context) {
 			return // 成功处理请求，直接返回
 		}
 
-		go processChannelError(c, channel.Id, channel.Type, channel.Name, channel.GetAutoBan(), openaiErr)
+		go processChannelError(c, channel.Id, channel.Type, channel.Name, originalModel, channel.GetAutoBan(), openaiErr)
 
 		if !shouldRetry(c, openaiErr, common.RetryTimes-i) {
 			break
@@ -212,10 +212,10 @@ func shouldRetry(c *gin.Context, openaiErr *dto.OpenAIErrorWithStatusCode, retry
 	return true
 }
 
-func processChannelError(c *gin.Context, channelId int, channelType int, channelName string, autoBan bool, err *dto.OpenAIErrorWithStatusCode) {
+func processChannelError(c *gin.Context, channelId int, channelType int, channelName string, originalModel string, autoBan bool, err *dto.OpenAIErrorWithStatusCode) {
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
-	common.LogError(c, fmt.Sprintf("relay error (channel #%d, status code: %d): %s", channelId, err.StatusCode, err.Error.Message))
+	common.LogError(c, fmt.Sprintf("relay error (channel #%d, originalModel %s, status code: %d): %s", channelId, originalModel, err.StatusCode, err.Error.Message))
 	if service.ShouldDisableChannel(channelType, err) && autoBan {
 		service.DisableChannel(channelId, channelName, err.Error.Message)
 	}
