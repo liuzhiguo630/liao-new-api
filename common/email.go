@@ -9,17 +9,26 @@ import (
 	"time"
 )
 
+func generateMessageID() string {
+	domain := strings.Split(SMTPAccount, "@")[1]
+	return fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), GetRandomString(12), domain)
+}
+
 func SendEmail(subject string, receiver string, content string) error {
 	if SMTPFrom == "" { // for compatibility
 		SMTPFrom = SMTPAccount
+	}
+	if SMTPServer == "" && SMTPAccount == "" {
+		return fmt.Errorf("SMTP 服务器未配置")
 	}
 	encodedSubject := fmt.Sprintf("=?UTF-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(subject)))
 	mail := []byte(fmt.Sprintf("To: %s\r\n"+
 		"From: %s<%s>\r\n"+
 		"Subject: %s\r\n"+
 		"Date: %s\r\n"+
+		"Message-ID: %s\r\n"+ // 添加 Message-ID 头
 		"Content-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n",
-		receiver, SystemName, SMTPFrom, encodedSubject, time.Now().Format(time.RFC1123Z), content))
+		receiver, SystemName, SMTPFrom, encodedSubject, time.Now().Format(time.RFC1123Z), generateMessageID(), content))
 	auth := smtp.PlainAuth("", SMTPAccount, SMTPToken, SMTPServer)
 	addr := fmt.Sprintf("%s:%d", SMTPServer, SMTPPort)
 	to := strings.Split(receiver, ";")
@@ -62,6 +71,9 @@ func SendEmail(subject string, receiver string, content string) error {
 		if err != nil {
 			return err
 		}
+	} else if isOutlookServer(SMTPAccount) {
+		auth = LoginAuth(SMTPAccount, SMTPToken)
+		err = smtp.SendMail(addr, auth, SMTPAccount, to, mail)
 	} else {
 		err = smtp.SendMail(addr, auth, SMTPAccount, to, mail)
 	}

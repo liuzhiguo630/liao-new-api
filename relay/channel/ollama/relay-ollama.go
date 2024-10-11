@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"one-api/dto"
 	"one-api/service"
-	"strings"
 )
 
 func requestOpenAI2Ollama(request dto.GeneralOpenAIRequest) *OllamaRequest {
@@ -28,21 +27,32 @@ func requestOpenAI2Ollama(request dto.GeneralOpenAIRequest) *OllamaRequest {
 		Stop, _ = request.Stop.([]string)
 	}
 	return &OllamaRequest{
-		Model:       request.Model,
-		Messages:    messages,
-		Stream:      request.Stream,
-		Temperature: request.Temperature,
-		Seed:        request.Seed,
-		Topp:        request.TopP,
-		TopK:        request.TopK,
-		Stop:        Stop,
+		Model:            request.Model,
+		Messages:         messages,
+		Stream:           request.Stream,
+		Temperature:      request.Temperature,
+		Seed:             request.Seed,
+		Topp:             request.TopP,
+		TopK:             request.TopK,
+		Stop:             Stop,
+		Tools:            request.Tools,
+		ResponseFormat:   request.ResponseFormat,
+		FrequencyPenalty: request.FrequencyPenalty,
+		PresencePenalty:  request.PresencePenalty,
 	}
 }
 
 func requestOpenAI2Embeddings(request dto.GeneralOpenAIRequest) *OllamaEmbeddingRequest {
 	return &OllamaEmbeddingRequest{
-		Model:  request.Model,
-		Prompt: strings.Join(request.ParseInput(), " "),
+		Model: request.Model,
+		Input: request.ParseInput(),
+		Options: &Options{
+			Seed:             int(request.Seed),
+			Temperature:      request.Temperature,
+			TopP:             request.TopP,
+			FrequencyPenalty: request.FrequencyPenalty,
+			PresencePenalty:  request.PresencePenalty,
+		},
 	}
 }
 
@@ -59,6 +69,9 @@ func ollamaEmbeddingHandler(c *gin.Context, resp *http.Response, promptTokens in
 	err = json.Unmarshal(responseBody, &ollamaEmbeddingResponse)
 	if err != nil {
 		return service.OpenAIErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
+	}
+	if ollamaEmbeddingResponse.Error != "" {
+		return service.OpenAIErrorWrapper(err, "ollama_error", resp.StatusCode), nil
 	}
 	data := make([]dto.OpenAIEmbeddingResponseItem, 0, 1)
 	data = append(data, dto.OpenAIEmbeddingResponseItem{

@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 	"one-api/common"
 	"one-api/constant"
+	relaycommon "one-api/relay/common"
 	"strconv"
 	"strings"
 )
@@ -23,8 +24,32 @@ type Token struct {
 	UnlimitedQuota     bool           `json:"unlimited_quota" gorm:"default:false"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled" gorm:"default:false"`
 	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
+	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
+	Group              string         `json:"group" gorm:"default:''"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+}
+
+func (token *Token) GetIpLimitsMap() map[string]any {
+	// delete empty spaces
+	//split with \n
+	ipLimitsMap := make(map[string]any)
+	if token.AllowIps == nil {
+		return ipLimitsMap
+	}
+	cleanIps := strings.ReplaceAll(*token.AllowIps, " ", "")
+	if cleanIps == "" {
+		return ipLimitsMap
+	}
+	ips := strings.Split(cleanIps, "\n")
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		ip = strings.ReplaceAll(ip, ",", "")
+		if common.IsIP(ip) {
+			ipLimitsMap[ip] = true
+		}
+	}
+	return ipLimitsMap
 }
 
 func GetAllUserTokens(userId int, startIdx int, num int) ([]*Token, error) {
@@ -51,12 +76,12 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		if token.Status == common.TokenStatusExhausted {
 			keyPrefix := key[:3]
 			keySuffix := key[len(key)-3:]
-			return nil, errors.New("该令牌额度已用尽 TokenStatusExhausted[sk-" + keyPrefix + "***" + keySuffix + "]")
+			return token, errors.New("该令牌额度已用尽 TokenStatusExhausted[sk-" + keyPrefix + "***" + keySuffix + "]")
 		} else if token.Status == common.TokenStatusExpired {
-			return nil, errors.New("该令牌已过期")
+			return token, errors.New("该令牌已过期")
 		}
 		if token.Status != common.TokenStatusEnabled {
-			return nil, errors.New("该令牌状态不可用")
+			return token, errors.New("该令牌状态不可用")
 		}
 		if token.ExpiredTime != -1 && token.ExpiredTime < common.GetTimestamp() {
 			if !common.RedisEnabled {
@@ -66,7 +91,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 					common.SysError("failed to update token status" + err.Error())
 				}
 			}
-			return nil, errors.New("该令牌已过期")
+			return token, errors.New("该令牌已过期")
 		}
 		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
 			if !common.RedisEnabled {
@@ -79,7 +104,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			}
 			keyPrefix := key[:3]
 			keySuffix := key[len(key)-3:]
-			return nil, errors.New(fmt.Sprintf("[sk-%s***%s] 该令牌额度已用尽 !token.UnlimitedQuota && token.RemainQuota = %d", keyPrefix, keySuffix, token.RemainQuota))
+			return token, errors.New(fmt.Sprintf("[sk-%s***%s] 该令牌额度已用尽 !token.UnlimitedQuota && token.RemainQuota = %d", keyPrefix, keySuffix, token.RemainQuota))
 		}
 		return token, nil
 	}
@@ -130,7 +155,8 @@ func (token *Token) Insert() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() error {
 	var err error
-	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota", "model_limits_enabled", "model_limits").Updates(token).Error
+	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+		"model_limits_enabled", "model_limits", "allow_ips", "group").Updates(token).Error
 	return err
 }
 
@@ -232,51 +258,52 @@ func decreaseTokenQuota(id int, quota int) (err error) {
 	return err
 }
 
-func PreConsumeTokenQuota(tokenId int, quota int) (userQuota int, err error) {
+func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) (userQuota int, err error) {
 	if quota < 0 {
 		return 0, errors.New("quota 不能为负数！")
 	}
-	token, err := GetTokenById(tokenId)
-	if err != nil {
-		return 0, err
+	if !relayInfo.IsPlayground {
+		token, err := GetTokenById(relayInfo.TokenId)
+		if err != nil {
+			return 0, err
+		}
+		if !token.UnlimitedQuota && token.RemainQuota < quota {
+			return 0, errors.New("令牌额度不足")
+		}
 	}
-	if !token.UnlimitedQuota && token.RemainQuota < quota {
-		return 0, errors.New("令牌额度不足")
-	}
-	userQuota, err = GetUserQuota(token.UserId)
+	userQuota, err = GetUserQuota(relayInfo.UserId)
 	if err != nil {
 		return 0, err
 	}
 	if userQuota < quota {
 		return 0, errors.New(fmt.Sprintf("用户额度不足，剩余额度为 %d", userQuota))
 	}
-	if !token.UnlimitedQuota {
-		err = DecreaseTokenQuota(tokenId, quota)
+	if !relayInfo.IsPlayground {
+		err = DecreaseTokenQuota(relayInfo.TokenId, quota)
 		if err != nil {
 			return 0, err
 		}
 	}
-	err = DecreaseUserQuota(token.UserId, quota)
+	err = DecreaseUserQuota(relayInfo.UserId, quota)
 	return userQuota - quota, err
 }
 
-func PostConsumeTokenQuota(tokenId int, userQuota int, quota int, preConsumedQuota int, sendEmail bool) (err error) {
-	token, err := GetTokenById(tokenId)
+func PostConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, userQuota int, quota int, preConsumedQuota int, sendEmail bool) (err error) {
 
 	if quota > 0 {
-		err = DecreaseUserQuota(token.UserId, quota)
+		err = DecreaseUserQuota(relayInfo.UserId, quota)
 	} else {
-		err = IncreaseUserQuota(token.UserId, -quota)
+		err = IncreaseUserQuota(relayInfo.UserId, -quota)
 	}
 	if err != nil {
 		return err
 	}
 
-	if !token.UnlimitedQuota {
+	if !relayInfo.IsPlayground {
 		if quota > 0 {
-			err = DecreaseTokenQuota(tokenId, quota)
+			err = DecreaseTokenQuota(relayInfo.TokenId, quota)
 		} else {
-			err = IncreaseTokenQuota(tokenId, -quota)
+			err = IncreaseTokenQuota(relayInfo.TokenId, -quota)
 		}
 		if err != nil {
 			return err
@@ -289,7 +316,7 @@ func PostConsumeTokenQuota(tokenId int, userQuota int, quota int, preConsumedQuo
 			noMoreQuota := userQuota-(quota+preConsumedQuota) <= 0
 			if quotaTooLow || noMoreQuota {
 				go func() {
-					email, err := GetUserEmail(token.UserId)
+					email, err := GetUserEmail(relayInfo.UserId)
 					if err != nil {
 						common.SysError("failed to fetch user email: " + err.Error())
 					}

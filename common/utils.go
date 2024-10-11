@@ -1,20 +1,20 @@
 package common
 
 import (
-	"encoding/json"
+	crand "crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"github.com/google/uuid"
 	"html/template"
 	"log"
+	"math/big"
 	"math/rand"
 	"net"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 func OpenBrowser(url string) {
@@ -131,6 +131,11 @@ func IntMax(a int, b int) int {
 	}
 }
 
+func IsIP(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil
+}
+
 func GetUUID() string {
 	code := uuid.New().String()
 	code = strings.Replace(code, "-", "", -1)
@@ -140,33 +145,35 @@ func GetUUID() string {
 const keyChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-func GenerateKey() string {
-	//rand.Seed(time.Now().UnixNano())
-	key := make([]byte, 48)
-	for i := 0; i < 16; i++ {
-		key[i] = keyChars[rand.Intn(len(keyChars))]
-	}
-	uuid_ := GetUUID()
-	for i := 0; i < 32; i++ {
-		c := uuid_[i]
-		if i%2 == 0 && c >= 'a' && c <= 'z' {
-			c = c - 'a' + 'A'
+func GenerateRandomCharsKey(length int) (string, error) {
+	b := make([]byte, length)
+	maxI := big.NewInt(int64(len(keyChars)))
+
+	for i := range b {
+		n, err := crand.Int(crand.Reader, maxI)
+		if err != nil {
+			return "", err
 		}
-		key[i+16] = c
+		b[i] = keyChars[n.Int64()]
 	}
-	return string(key)
+
+	return string(b), nil
 }
 
-func GetRandomString(length int) string {
-	//rand.Seed(time.Now().UnixNano())
-	key := make([]byte, length)
-	for i := 0; i < length; i++ {
-		key[i] = keyChars[rand.Intn(len(keyChars))]
+func GenerateRandomKey(length int) (string, error) {
+	bytes := make([]byte, length*3/4) // 对于48位的输出，这里应该是36
+	if _, err := crand.Read(bytes); err != nil {
+		return "", err
 	}
-	return string(key)
+	return base64.StdEncoding.EncodeToString(bytes), nil
+}
+
+func GenerateKey() (string, error) {
+	//rand.Seed(time.Now().UnixNano())
+	return GenerateRandomCharsKey(48)
 }
 
 func GetRandomInt(max int) int {
@@ -191,79 +198,11 @@ func Max(a int, b int) int {
 	}
 }
 
-func GetOrDefault(env string, defaultValue int) int {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	num, err := strconv.Atoi(os.Getenv(env))
-	if err != nil {
-		SysError(fmt.Sprintf("failed to parse %s: %s, using default value: %d", env, err.Error(), defaultValue))
-		return defaultValue
-	}
-	return num
-}
-
-func GetOrDefaultString(env string, defaultValue string) string {
-	if env == "" || os.Getenv(env) == "" {
-		return defaultValue
-	}
-	return os.Getenv(env)
-}
-
 func MessageWithRequestId(message string, id string) string {
 	return fmt.Sprintf("%s (request id: %s)", message, id)
-}
-
-func String2Int(str string) int {
-	num, err := strconv.Atoi(str)
-	if err != nil {
-		return 0
-	}
-	return num
-}
-
-func StringsContains(strs []string, str string) bool {
-	for _, s := range strs {
-		if s == str {
-			return true
-		}
-	}
-	return false
-}
-
-// StringToByteSlice []byte only read, panic on append
-func StringToByteSlice(s string) []byte {
-	tmp1 := (*[2]uintptr)(unsafe.Pointer(&s))
-	tmp2 := [3]uintptr{tmp1[0], tmp1[1], tmp1[1]}
-	return *(*[]byte)(unsafe.Pointer(&tmp2))
 }
 
 func RandomSleep() {
 	// Sleep for 0-3000 ms
 	time.Sleep(time.Duration(rand.Intn(3000)) * time.Millisecond)
-}
-
-func MapToJsonStr(m map[string]interface{}) string {
-	bytes, err := json.Marshal(m)
-	if err != nil {
-		return ""
-	}
-	return string(bytes)
-}
-
-func MapToJsonStrFloat(m map[string]float64) string {
-	bytes, err := json.Marshal(m)
-	if err != nil {
-		return ""
-	}
-	return string(bytes)
-}
-
-func StrToMap(str string) map[string]interface{} {
-	m := make(map[string]interface{})
-	err := json.Unmarshal([]byte(str), &m)
-	if err != nil {
-		return nil
-	}
-	return m
 }

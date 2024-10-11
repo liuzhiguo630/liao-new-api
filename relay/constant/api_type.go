@@ -20,6 +20,11 @@ const (
 	APITypePerplexity
 	APITypeAws
 	APITypeCohere
+	APITypeDify
+	APITypeJina
+	APITypeCloudflare
+	APITypeSiliconFlow
+	APITypeVertexAi
 
 	APITypeDummy // this one is only for count, do not add any channel after this
 )
@@ -57,6 +62,16 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = APITypeAws
 	case common.ChannelTypeCohere:
 		apiType = APITypeCohere
+	case common.ChannelTypeDify:
+		apiType = APITypeDify
+	case common.ChannelTypeJina:
+		apiType = APITypeJina
+	case common.ChannelCloudflare:
+		apiType = APITypeCloudflare
+	case common.ChannelTypeSiliconFlow:
+		apiType = APITypeSiliconFlow
+	case common.ChannelTypeVertexAi:
+		apiType = APITypeVertexAi
 	}
 	if apiType == -1 {
 		return APITypeOpenAI, false

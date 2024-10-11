@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"one-api/common"
@@ -21,11 +22,37 @@ type ModelRequest struct {
 
 func Distribute() func(c *gin.Context) {
 	return func(c *gin.Context) {
+		allowIpsMap := c.GetStringMap("allow_ips")
+		if len(allowIpsMap) != 0 {
+			clientIp := c.ClientIP()
+			if _, ok := allowIpsMap[clientIp]; !ok {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "您的 IP 不在令牌允许访问的列表中")
+				return
+			}
+		}
 		userId := c.GetInt("id")
 		var channel *model.Channel
 		channelId, ok := c.Get("specific_channel_id")
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
+		if err != nil {
+			abortWithOpenAiMessage(c, http.StatusBadRequest, "Invalid request, "+err.Error())
+			return
+		}
 		userGroup, _ := model.CacheGetUserGroup(userId)
+		tokenGroup := c.GetString("token_group")
+		if tokenGroup != "" {
+			// check common.UserUsableGroups[userGroup]
+			if _, ok := common.UserUsableGroups[tokenGroup]; !ok {
+				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("令牌分组 %s 已被禁用", tokenGroup))
+				return
+			}
+			// check group in common.GroupRatio
+			if _, ok := common.GroupRatio[tokenGroup]; !ok {
+				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
+				return
+			}
+			userGroup = tokenGroup
+		}
 		c.Set("group", userGroup)
 		if ok {
 			id, err := strconv.Atoi(channelId.(string))
@@ -125,12 +152,23 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			modelRequest.Model = midjourneyModel
 		}
 		c.Set("relay_mode", relayMode)
+	} else if strings.Contains(c.Request.URL.Path, "/suno/") {
+		relayMode := relayconstant.Path2RelaySuno(c.Request.Method, c.Request.URL.Path)
+		if relayMode == relayconstant.RelayModeSunoFetch ||
+			relayMode == relayconstant.RelayModeSunoFetchByID {
+			shouldSelectChannel = false
+		} else {
+			modelName := service.CoverTaskActionToModelName(constant.TaskPlatformSuno, c.Param("action"))
+			modelRequest.Model = modelName
+		}
+		c.Set("platform", string(constant.TaskPlatformSuno))
+		c.Set("relay_mode", relayMode)
 	} else if !strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") {
 		err = common.UnmarshalBodyReusable(c, &modelRequest)
 	}
 	if err != nil {
 		abortWithOpenAiMessage(c, http.StatusBadRequest, "无效的请求, "+err.Error())
-		return nil, false, err
+		return nil, false, errors.New("无效的请求, " + err.Error())
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/moderations") {
 		if modelRequest.Model == "" {
@@ -143,18 +181,22 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		}
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations") {
-		if modelRequest.Model == "" {
-			modelRequest.Model = "dall-e"
-		}
+		modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "dall-e")
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/audio") {
-		if modelRequest.Model == "" {
-			if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/speech") {
-				modelRequest.Model = "tts-1"
-			} else {
-				modelRequest.Model = "whisper-1"
-			}
+		relayMode := relayconstant.RelayModeAudioSpeech
+		if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/speech") {
+			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "tts-1")
+		} else if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/translations") {
+			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, c.PostForm("model"))
+			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "whisper-1")
+			relayMode = relayconstant.RelayModeAudioTranslation
+		} else if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") {
+			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, c.PostForm("model"))
+			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "whisper-1")
+			relayMode = relayconstant.RelayModeAudioTranscription
 		}
+		c.Set("relay_mode", relayMode)
 	}
 	return &modelRequest, shouldSelectChannel, nil
 }
@@ -164,18 +206,13 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	if channel == nil {
 		return
 	}
-	c.Set("channel", channel.Type)
 	c.Set("channel_id", channel.Id)
 	c.Set("channel_name", channel.Name)
-	ban := true
-	// parse *int to bool
-	if channel.AutoBan != nil && *channel.AutoBan == 0 {
-		ban = false
-	}
+	c.Set("channel_type", channel.Type)
 	if nil != channel.OpenAIOrganization && "" != *channel.OpenAIOrganization {
 		c.Set("channel_organization", *channel.OpenAIOrganization)
 	}
-	c.Set("auto_ban", ban)
+	c.Set("auto_ban", channel.GetAutoBan())
 	c.Set("model_mapping", channel.GetModelMapping())
 	c.Set("status_code_mapping", channel.GetStatusCodeMapping())
 	c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", channel.Key))
@@ -184,13 +221,15 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	switch channel.Type {
 	case common.ChannelTypeAzure:
 		c.Set("api_version", channel.Other)
+	case common.ChannelTypeVertexAi:
+		c.Set("region", channel.Other)
 	case common.ChannelTypeXunfei:
 		c.Set("api_version", channel.Other)
-	//case common.ChannelTypeAIProxyLibrary:
-	//	c.Set("library_id", channel.Other)
 	case common.ChannelTypeGemini:
 		c.Set("api_version", channel.Other)
 	case common.ChannelTypeAli:
 		c.Set("plugin", channel.Other)
+	case common.ChannelCloudflare:
+		c.Set("api_version", channel.Other)
 	}
 }

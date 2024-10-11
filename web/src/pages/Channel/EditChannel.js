@@ -37,6 +37,11 @@ const STATUS_CODE_MAPPING_EXAMPLE = {
   400: '500',
 };
 
+const REGION_EXAMPLE = {
+  "default": "us-central1",
+  "claude-3-5-sonnet-20240620": "europe-west1"
+}
+
 const fetchButtonTips = "1. 新建渠道时，请求通过当前浏览器发出；2. 编辑已有渠道，请求通过后端服务器发出"
 
 function type2secretPrompt(type) {
@@ -126,6 +131,12 @@ const EditChannel = (props) => {
             'mj_uploads',
           ];
           break;
+        case 36:
+          localModels = [
+            'suno_music',
+            'suno_lyrics',
+          ];
+          break;
         default:
           localModels = getChannelModels(value);
           break;
@@ -209,7 +220,7 @@ const EditChannel = (props) => {
             }
           })
           if (res.data && res.data?.success) {
-            models.push(...es.data.data.map((model) => model.id))
+            models.push(...res.data.data.map((model) => model.id))
           } else {
             err = true
           }
@@ -513,12 +524,32 @@ const EditChannel = (props) => {
               />
             </>
           )}
-          <div style={{ marginTop: 10 }}>
+          {inputs.type === 36 && (
+              <>
+                <div style={{marginTop: 10}}>
+                  <Typography.Text strong>
+                    注意非Chat API，请务必填写正确的API地址，否则可能导致无法使用
+                  </Typography.Text>
+                </div>
+                <Input
+                    name='base_url'
+                    placeholder={
+                      '请输入到 /suno 前的路径，通常就是域名，例如：https://api.example.com '
+                    }
+                    onChange={(value) => {
+                      handleInputChange('base_url', value);
+                    }}
+                    value={inputs.base_url}
+                    autoComplete='new-password'
+                />
+              </>
+          )}
+          <div style={{marginTop: 10}}>
             <Typography.Text strong>名称：</Typography.Text>
           </div>
           <Input
-            required
-            name='name'
+              required
+              name='name'
             placeholder={'请为渠道命名'}
             onChange={(value) => {
               handleInputChange('name', value);
@@ -562,6 +593,44 @@ const EditChannel = (props) => {
               />
             </>
           )}
+          {inputs.type === 41 && (
+            <>
+              <div style={{ marginTop: 10 }}>
+                <Typography.Text strong>部署地区：</Typography.Text>
+              </div>
+              <TextArea
+                name='other'
+                placeholder={
+                  '请输入部署地区，例如：us-central1\n支持使用模型映射格式\n' +
+                  '{\n' +
+                  '    "default": "us-central1",\n' +
+                  '    "claude-3-5-sonnet-20240620": "europe-west1"\n' +
+                  '}'
+                }
+                autosize={{ minRows: 2 }}
+                onChange={(value) => {
+                  handleInputChange('other', value);
+                }}
+                value={inputs.other}
+                autoComplete='new-password'
+              />
+              <Typography.Text
+                style={{
+                  color: 'rgba(var(--semi-blue-5), 1)',
+                  userSelect: 'none',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  handleInputChange(
+                    'other',
+                    JSON.stringify(REGION_EXAMPLE, null, 2),
+                  );
+                }}
+              >
+                填入模板
+              </Typography.Text>
+            </>
+          )}
           {inputs.type === 21 && (
             <>
               <div style={{ marginTop: 10 }}>
@@ -571,6 +640,24 @@ const EditChannel = (props) => {
                 label='知识库 ID'
                 name='other'
                 placeholder={'请输入知识库 ID，例如：123456'}
+                onChange={(value) => {
+                  handleInputChange('other', value);
+                }}
+                value={inputs.other}
+                autoComplete='new-password'
+              />
+            </>
+          )}
+          {inputs.type === 39 && (
+            <>
+              <div style={{ marginTop: 10 }}>
+                <Typography.Text strong>Account ID：</Typography.Text>
+              </div>
+              <Input
+                name='other'
+                placeholder={
+                  '请输入Account ID，例如：d6b5da8hk1awo8nap34ube6gh'
+                }
                 onChange={(value) => {
                   handleInputChange('other', value);
                 }}
@@ -690,17 +777,47 @@ const EditChannel = (props) => {
               autoComplete='new-password'
             />
           ) : (
-            <Input
-              label='密钥'
-              name='key'
-              required
-              placeholder={type2secretPrompt(inputs.type)}
-              onChange={(value) => {
-                handleInputChange('key', value);
-              }}
-              value={inputs.key}
-              autoComplete='new-password'
-            />
+            <>
+              {inputs.type === 41 ? (
+                <TextArea
+                  label='鉴权json'
+                  name='key'
+                  required
+                  placeholder={'{\n' +
+                    '  "type": "service_account",\n' +
+                    '  "project_id": "abc-bcd-123-456",\n' +
+                    '  "private_key_id": "123xxxxx456",\n' +
+                    '  "private_key": "-----BEGIN PRIVATE KEY-----xxxx\n' +
+                    '  "client_email": "xxx@developer.gserviceaccount.com",\n' +
+                    '  "client_id": "111222333",\n' +
+                    '  "auth_uri": "https://accounts.google.com/o/oauth2/auth",\n' +
+                    '  "token_uri": "https://oauth2.googleapis.com/token",\n' +
+                    '  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",\n' +
+                    '  "client_x509_cert_url": "https://xxxxx.gserviceaccount.com",\n' +
+                    '  "universe_domain": "googleapis.com"\n' +
+                    '}'}
+                  onChange={(value) => {
+                    handleInputChange('key', value);
+                  }}
+                  autosize={{ minRows: 10 }}
+                  value={inputs.key}
+                  autoComplete='new-password'
+                />
+              ) : (
+                <Input
+                  label='密钥'
+                  name='key'
+                  required
+                  placeholder={type2secretPrompt(inputs.type)}
+                  onChange={(value) => {
+                    handleInputChange('key', value);
+                  }}
+                  value={inputs.key}
+                  autoComplete='new-password'
+                />
+              )
+              }
+              </>
           )}
           {inputs.type === 1 && (
             <>
@@ -758,7 +875,7 @@ const EditChannel = (props) => {
               </Space>
             </div>
           )}
-          {inputs.type !== 3 && inputs.type !== 8 && inputs.type !== 22 && (
+          {inputs.type !== 3 && inputs.type !== 8 && inputs.type !== 22 && inputs.type !== 36 && (
             <>
               <div style={{ marginTop: 10 }}>
                 <Typography.Text strong>代理：</Typography.Text>

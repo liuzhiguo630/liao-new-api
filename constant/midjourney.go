@@ -4,6 +4,7 @@ var MjNotifyEnabled = false
 var MjAccountFilterEnabled = false
 var MjModeClearEnabled = false
 var MjForwardUrlEnabled = true
+var MjActionCheckSuccessEnabled = true
 
 const (
 	MjErrorUnknown = 5
@@ -26,6 +27,7 @@ const (
 	MjActionLowVariation  = "LOW_VARIATION"
 	MjActionPan           = "PAN"
 	MjActionSwapFace      = "SWAP_FACE"
+	MjActionUpload        = "UPLOAD"
 )
 
 var MidjourneyModel2Action = map[string]string{
@@ -44,4 +46,5 @@ var MidjourneyModel2Action = map[string]string{
 	"mj_low_variation":  MjActionLowVariation,
 	"mj_pan":            MjActionPan,
 	"swap_face":         MjActionSwapFace,
+	"mj_upload":         MjActionUpload,
 }

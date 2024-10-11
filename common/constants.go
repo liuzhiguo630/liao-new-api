@@ -21,6 +21,7 @@ var QuotaPerUnit = 500 * 1000.0 // $0.002 / 1K tokens
 var DisplayInCurrencyEnabled = true
 var DisplayTokenStatEnabled = true
 var DrawingEnabled = true
+var TaskEnabled = true
 var DataExportEnabled = true
 var DataExportInterval = 5         // unit: minute
 var DataExportDefaultTime = "hour" // unit: minute
@@ -102,14 +103,17 @@ var IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 var requestInterval, _ = strconv.Atoi(os.Getenv("POLLING_INTERVAL"))
 var RequestInterval = time.Duration(requestInterval) * time.Second
 
-var SyncFrequency = GetOrDefault("SYNC_FREQUENCY", 60) // unit is second
+var SyncFrequency = GetEnvOrDefault("SYNC_FREQUENCY", 60) // unit is second
 
 var BatchUpdateEnabled = false
-var BatchUpdateInterval = GetOrDefault("BATCH_UPDATE_INTERVAL", 5)
+var BatchUpdateInterval = GetEnvOrDefault("BATCH_UPDATE_INTERVAL", 5)
 
-var RelayTimeout = GetOrDefault("RELAY_TIMEOUT", 0) // unit is second
+var RelayTimeout = GetEnvOrDefault("RELAY_TIMEOUT", 0) // unit is second
 
-var GeminiSafetySetting = GetOrDefaultString("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
+var GeminiSafetySetting = GetEnvOrDefaultString("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
+
+// https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT
+var CohereSafetySetting = GetEnvOrDefaultString("COHERE_SAFETY_SETTING", "NONE")
 
 const (
 	RequestIdKey = "X-Oneapi-Request-Id"
@@ -122,6 +126,10 @@ const (
 	RoleRootUser   = 100
 )
 
+func IsValidateRole(role int) bool {
+	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
+}
+
 var (
 	FileUploadPermission    = RoleGuestUser
 	FileDownloadPermission  = RoleGuestUser
@@ -132,10 +140,10 @@ var (
 // All duration's unit is seconds
 // Shouldn't larger then RateLimitKeyExpirationDuration
 var (
-	GlobalApiRateLimitNum            = GetOrDefault("GLOBAL_API_RATE_LIMIT", 180)
+	GlobalApiRateLimitNum            = GetEnvOrDefault("GLOBAL_API_RATE_LIMIT", 180)
 	GlobalApiRateLimitDuration int64 = 3 * 60
 
-	GlobalWebRateLimitNum            = GetOrDefault("GLOBAL_WEB_RATE_LIMIT", 60)
+	GlobalWebRateLimitNum            = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 60)
 	GlobalWebRateLimitDuration int64 = 3 * 60
 
 	UploadRateLimitNum            = 10
@@ -208,35 +216,42 @@ const (
 	ChannelTypeAws            = 33
 	ChannelTypeCohere         = 34
 	ChannelTypeMiniMax        = 35
+	ChannelTypeSunoAPI        = 36
+	ChannelTypeDify           = 37
+	ChannelTypeJina           = 38
+	ChannelCloudflare         = 39
+	ChannelTypeSiliconFlow    = 40
+	ChannelTypeVertexAi       = 41
 
 	ChannelTypeDummy // this one is only for count, do not add any channel after this
+
 )
 
 var ChannelBaseURLs = []string{
-	"",                                  // 0
-	"https://api.openai.com",            // 1
-	"https://oa.api2d.net",              // 2
-	"",                                  // 3
-	"http://localhost:11434",            // 4
-	"https://api.openai-sb.com",         // 5
-	"https://api.openaimax.com",         // 6
-	"https://api.ohmygpt.com",           // 7
-	"",                                  // 8
-	"https://api.caipacity.com",         // 9
-	"https://api.aiproxy.io",            // 10
-	"",                                  // 11
-	"https://api.api2gpt.com",           // 12
-	"https://api.aigc2d.com",            // 13
-	"https://api.anthropic.com",         // 14
-	"https://aip.baidubce.com",          // 15
-	"https://open.bigmodel.cn",          // 16
-	"https://dashscope.aliyuncs.com",    // 17
-	"",                                  // 18
-	"https://ai.360.cn",                 // 19
-	"https://openrouter.ai/api",         // 20
-	"https://api.aiproxy.io",            // 21
-	"https://fastgpt.run/api/openapi",   // 22
-	"https://hunyuan.cloud.tencent.com", //23
+	"",                                    // 0
+	"https://api.openai.com",              // 1
+	"https://oa.api2d.net",                // 2
+	"",                                    // 3
+	"http://localhost:11434",              // 4
+	"https://api.openai-sb.com",           // 5
+	"https://api.openaimax.com",           // 6
+	"https://api.ohmygpt.com",             // 7
+	"",                                    // 8
+	"https://api.caipacity.com",           // 9
+	"https://api.aiproxy.io",              // 10
+	"",                                    // 11
+	"https://api.api2gpt.com",             // 12
+	"https://api.aigc2d.com",              // 13
+	"https://api.anthropic.com",           // 14
+	"https://aip.baidubce.com",            // 15
+	"https://open.bigmodel.cn",            // 16
+	"https://dashscope.aliyuncs.com",      // 17
+	"",                                    // 18
+	"https://ai.360.cn",                   // 19
+	"https://openrouter.ai/api",           // 20
+	"https://api.aiproxy.io",              // 21
+	"https://fastgpt.run/api/openapi",     // 22
+	"https://hunyuan.tencentcloudapi.com", //23
 	"https://generativelanguage.googleapis.com", //24
 	"https://api.moonshot.cn",                   //25
 	"https://open.bigmodel.cn",                  //26
@@ -249,4 +264,10 @@ var ChannelBaseURLs = []string{
 	"",                                          //33
 	"https://api.cohere.ai",                     //34
 	"https://api.minimax.chat",                  //35
+	"",                                          //36
+	"",                                          //37
+	"https://api.jina.ai",                       //38
+	"https://api.cloudflare.com",                //39
+	"https://api.siliconflow.cn",                //40
+	"",                                          //41
 }

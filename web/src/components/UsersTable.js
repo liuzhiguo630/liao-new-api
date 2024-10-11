@@ -151,7 +151,7 @@ const UsersTable = () => {
                 title='确定？'
                 okType={'warning'}
                 onConfirm={() => {
-                  manageUser(record.username, 'promote', record);
+                  manageUser(record.id, 'promote', record);
                 }}
               >
                 <Button theme='light' type='warning' style={{ marginRight: 1 }}>
@@ -162,7 +162,7 @@ const UsersTable = () => {
                 title='确定？'
                 okType={'warning'}
                 onConfirm={() => {
-                  manageUser(record.username, 'demote', record);
+                  manageUser(record.id, 'demote', record);
                 }}
               >
                 <Button
@@ -179,7 +179,7 @@ const UsersTable = () => {
                   type='warning'
                   style={{ marginRight: 1 }}
                   onClick={async () => {
-                    manageUser(record.username, 'disable', record);
+                    manageUser(record.id, 'disable', record);
                   }}
                 >
                   禁用
@@ -190,7 +190,7 @@ const UsersTable = () => {
                   type='secondary'
                   style={{ marginRight: 1 }}
                   onClick={async () => {
-                    manageUser(record.username, 'enable', record);
+                    manageUser(record.id, 'enable', record);
                   }}
                   disabled={record.status === 3}
                 >
@@ -208,23 +208,23 @@ const UsersTable = () => {
               >
                 编辑
               </Button>
+              <Popconfirm
+                title='确定是否要注销此用户？'
+                content='相当于删除用户，此修改将不可逆'
+                okType={'danger'}
+                position={'left'}
+                onConfirm={() => {
+                  manageUser(record.id, 'delete', record).then(() => {
+                    removeRecord(record.id);
+                  });
+                }}
+              >
+                <Button theme='light' type='danger' style={{ marginRight: 1 }}>
+                  注销
+                </Button>
+              </Popconfirm>
             </>
           )}
-          <Popconfirm
-            title='确定是否要删除此用户？'
-            content='硬删除，此修改将不可逆'
-            okType={'danger'}
-            position={'left'}
-            onConfirm={() => {
-              manageUser(record.username, 'delete', record).then(() => {
-                removeRecord(record.id);
-              });
-            }}
-          >
-            <Button theme='light' type='danger' style={{ marginRight: 1 }}>
-              删除
-            </Button>
-          </Popconfirm>
         </div>
       ),
     },
@@ -253,13 +253,13 @@ const UsersTable = () => {
   };
 
   const removeRecord = (key) => {
-    console.log(key);
     let newDataSource = [...users];
     if (key != null) {
       let idx = newDataSource.findIndex((data) => data.id === key);
 
       if (idx > -1) {
-        newDataSource.splice(idx, 1);
+        // update deletedAt
+        newDataSource[idx].DeletedAt = new Date();
         setUsers(newDataSource);
       }
     }
@@ -303,9 +303,9 @@ const UsersTable = () => {
     fetchGroups().then();
   }, []);
 
-  const manageUser = async (username, action, record) => {
+  const manageUser = async (userId, action, record) => {
     const res = await API.post('/api/user/manage', {
-      username,
+      id: userId,
       action,
     });
     const { success, message } = res.data;
