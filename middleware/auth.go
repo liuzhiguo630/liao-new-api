@@ -194,6 +194,7 @@ func TokenAuth() func(c *gin.Context) {
 		c.Set("id", token.UserId)
 		c.Set("token_id", token.Id)
 		c.Set("token_name", token.Name)
+		c.Set("token_rpm", token.Rpm)
 		c.Set("token_unlimited_quota", token.UnlimitedQuota)
 		if !token.UnlimitedQuota {
 			c.Set("token_quota", token.RemainQuota)

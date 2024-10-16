@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"one-api/common"
+	"strings"
 	"time"
 )
 
@@ -61,6 +62,9 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 
 func memoryRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
 	key := mark + c.ClientIP()
+	if strings.Contains(mark, "-") {
+		key = mark
+	}
 	if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
 		c.Status(http.StatusTooManyRequests)
 		c.Abort()
@@ -88,6 +92,20 @@ func GlobalWebRateLimit() func(c *gin.Context) {
 
 func GlobalAPIRateLimit() func(c *gin.Context) {
 	return rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
+}
+
+func TokenRateLimit() func(c *gin.Context) {
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	return func(c *gin.Context) {
+		tokenId := c.GetInt("token_id")
+		rpm := c.GetInt("token_rpm")
+		// <= 0 为不限制
+		if rpm <= 0 {
+			return
+		}
+		tk := fmt.Sprintf("TK-%d", tokenId)
+		memoryRateLimiter(c, rpm, 60, tk)
+	}
 }
 
 func CriticalRateLimit() func(c *gin.Context) {
