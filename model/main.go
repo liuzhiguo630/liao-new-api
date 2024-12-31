@@ -119,7 +119,8 @@ func chooseDB(envName string) (*gorm.DB, error) {
 		}
 		common.UsingMySQL = true
 		return gorm.Open(mysql.Open(dsn), &gorm.Config{
-			PrepareStmt: false, // precompile SQL
+			PrepareStmt:            false, // precompile SQL
+			SkipDefaultTransaction: true,
 		})
 	}
 	// Use SQLite
