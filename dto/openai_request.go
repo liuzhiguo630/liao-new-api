@@ -18,12 +18,13 @@ type GeneralOpenAIRequest struct {
 	Model               string          `json:"model,omitempty"`
 	Messages            []Message       `json:"messages,omitempty"`
 	Prompt              any             `json:"prompt,omitempty"`
+	Suffix              any             `json:"suffix,omitempty"`
 	Stream              bool            `json:"stream,omitempty"`
 	StreamOptions       *StreamOptions  `json:"stream_options,omitempty"`
 	MaxTokens           uint            `json:"max_tokens,omitempty"`
 	MaxCompletionTokens uint            `json:"max_completion_tokens,omitempty"`
 	ReasoningEffort     string          `json:"reasoning_effort,omitempty"`
-	Temperature         float64         `json:"temperature,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
 	TopP                float64         `json:"top_p,omitempty"`
 	TopK                int             `json:"top_k,omitempty"`
 	Stop                any             `json:"stop,omitempty"`
@@ -86,11 +87,13 @@ func (r GeneralOpenAIRequest) ParseInput() []string {
 }
 
 type Message struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content"`
-	Name       *string         `json:"name,omitempty"`
-	ToolCalls  json.RawMessage `json:"tool_calls,omitempty"`
-	ToolCallId string          `json:"tool_call_id,omitempty"`
+	Role             string          `json:"role"`
+	Content          json.RawMessage `json:"content"`
+	Name             *string         `json:"name,omitempty"`
+	Prefix           *bool           `json:"prefix,omitempty"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ToolCalls        json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallId       string          `json:"tool_call_id,omitempty"`
 }
 
 type MediaContent struct {
@@ -115,6 +118,17 @@ const (
 	ContentTypeImageURL   = "image_url"
 	ContentTypeInputAudio = "input_audio"
 )
+
+func (m *Message) GetPrefix() bool {
+	if m.Prefix == nil {
+		return false
+	}
+	return *m.Prefix
+}
+
+func (m *Message) SetPrefix(prefix bool) {
+	m.Prefix = &prefix
+}
 
 func (m *Message) ParseToolCalls() []ToolCall {
 	if m.ToolCalls == nil {

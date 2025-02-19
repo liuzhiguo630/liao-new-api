@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pkoukk/tiktoken-go"
 	"image"
 	"log"
 	"math"
@@ -14,6 +13,8 @@ import (
 	relaycommon "one-api/relay/common"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/pkoukk/tiktoken-go"
 )
 
 // tokenEncoderMap won't grow after initialization
@@ -92,13 +93,6 @@ func getImageToken(info *relaycommon.RelayInfo, imageUrl *dto.MessageImageUrl, m
 	if !constant.GetMediaTokenNotStream && !stream {
 		return 256, nil
 	}
-	// 是否统计图片token
-	if !constant.GetMediaToken {
-		return 256, nil
-	}
-	if info.ChannelType == common.ChannelTypeGemini || info.ChannelType == common.ChannelTypeVertexAi || info.ChannelType == common.ChannelTypeAnthropic {
-		return 256, nil
-	}
 	// 同步One API的图片计费逻辑
 	if imageUrl.Detail == "auto" || imageUrl.Detail == "" {
 		imageUrl.Detail = "high"
@@ -108,6 +102,13 @@ func getImageToken(info *relaycommon.RelayInfo, imageUrl *dto.MessageImageUrl, m
 	if strings.HasPrefix(model, "gpt-4o-mini") {
 		tileTokens = 5667
 		baseTokens = 2833
+	}
+	// 是否统计图片token
+	if !constant.GetMediaToken {
+		return 3 * baseTokens, nil
+	}
+	if info.ChannelType == common.ChannelTypeGemini || info.ChannelType == common.ChannelTypeVertexAi || info.ChannelType == common.ChannelTypeAnthropic {
+		return 3 * baseTokens, nil
 	}
 	var config image.Config
 	var err error
@@ -321,6 +322,12 @@ func CountTokenInput(input any, model string) (int, error) {
 		text := ""
 		for _, s := range v {
 			text += s
+		}
+		return CountTextToken(text, model)
+	case []interface{}:
+		text := ""
+		for _, item := range v {
+			text += fmt.Sprintf("%v", item)
 		}
 		return CountTextToken(text, model)
 	}
