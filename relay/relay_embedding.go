@@ -10,8 +10,8 @@ import (
 	"one-api/dto"
 	relaycommon "one-api/relay/common"
 	relayconstant "one-api/relay/constant"
+	"one-api/relay/helper"
 	"one-api/service"
-	"one-api/setting"
 )
 
 func getEmbeddingPromptToken(embeddingRequest dto.EmbeddingRequest) int {
@@ -47,43 +47,22 @@ func EmbeddingHelper(c *gin.Context) (openaiErr *dto.OpenAIErrorWithStatusCode) 
 		return service.OpenAIErrorWrapperLocal(err, "invalid_embedding_request", http.StatusBadRequest)
 	}
 
-	// map model name
-	modelMapping := c.GetString("model_mapping")
-	//isModelMapped := false
-	if modelMapping != "" && modelMapping != "{}" {
-		modelMap := make(map[string]string)
-		err := json.Unmarshal([]byte(modelMapping), &modelMap)
-		if err != nil {
-			return service.OpenAIErrorWrapperLocal(err, "unmarshal_model_mapping_failed", http.StatusInternalServerError)
-		}
-		if modelMap[embeddingRequest.Model] != "" {
-			embeddingRequest.Model = modelMap[embeddingRequest.Model]
-			// set upstream model name
-			//isModelMapped = true
-		}
+	err = helper.ModelMappedHelper(c, relayInfo)
+	if err != nil {
+		return service.OpenAIErrorWrapperLocal(err, "model_mapped_error", http.StatusInternalServerError)
 	}
 
-	relayInfo.UpstreamModelName = embeddingRequest.Model
-	modelPrice, success := common.GetModelPrice(embeddingRequest.Model, false)
-	groupRatio := setting.GetGroupRatio(relayInfo.Group)
-
-	var preConsumedQuota int
-	var ratio float64
-	var modelRatio float64
+	embeddingRequest.Model = relayInfo.UpstreamModelName
 
 	promptToken := getEmbeddingPromptToken(*embeddingRequest)
-	if !success {
-		preConsumedTokens := promptToken
-		modelRatio = common.GetModelRatio(embeddingRequest.Model)
-		ratio = modelRatio * groupRatio
-		preConsumedQuota = int(float64(preConsumedTokens) * ratio)
-	} else {
-		preConsumedQuota = int(modelPrice * common.QuotaPerUnit * groupRatio)
-	}
 	relayInfo.PromptTokens = promptToken
 
+	priceData, err := helper.ModelPriceHelper(c, relayInfo, promptToken, 0)
+	if err != nil {
+		return service.OpenAIErrorWrapperLocal(err, "model_price_error", http.StatusInternalServerError)
+	}
 	// pre-consume quota 预消耗配额
-	preConsumedQuota, userQuota, openaiErr := preConsumeQuota(c, preConsumedQuota, relayInfo)
+	preConsumedQuota, userQuota, openaiErr := preConsumeQuota(c, priceData.ShouldPreConsumedQuota, relayInfo)
 	if openaiErr != nil {
 		return openaiErr
 	}
@@ -119,7 +98,7 @@ func EmbeddingHelper(c *gin.Context) (openaiErr *dto.OpenAIErrorWithStatusCode) 
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
-			openaiErr = service.RelayErrorHandler(httpResp)
+			openaiErr = service.RelayErrorHandler(httpResp, false)
 			// reset status code 重置状态码
 			service.ResetStatusCode(openaiErr, statusCodeMappingStr)
 			return openaiErr
@@ -132,6 +111,6 @@ func EmbeddingHelper(c *gin.Context) (openaiErr *dto.OpenAIErrorWithStatusCode) 
 		service.ResetStatusCode(openaiErr, statusCodeMappingStr)
 		return openaiErr
 	}
-	postConsumeQuota(c, relayInfo, embeddingRequest.Model, usage.(*dto.Usage), ratio, preConsumedQuota, userQuota, modelRatio, groupRatio, modelPrice, success, "")
+	postConsumeQuota(c, relayInfo, usage.(*dto.Usage), preConsumedQuota, userQuota, priceData, "")
 	return nil
 }

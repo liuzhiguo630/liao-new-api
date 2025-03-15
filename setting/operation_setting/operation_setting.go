@@ -1,8 +1,9 @@
-package setting
+package operation_setting
 
 import "strings"
 
 var DemoSiteEnabled = false
+var SelfUseModeEnabled = false
 
 var AutomaticDisableKeywords = []string{
 	"Your credit balance is too low",
@@ -23,6 +24,7 @@ func AutomaticDisableKeywordsFromString(s string) {
 	ak := strings.Split(s, "\n")
 	for _, k := range ak {
 		k = strings.TrimSpace(k)
+		k = strings.ToLower(k)
 		if k != "" {
 			AutomaticDisableKeywords = append(AutomaticDisableKeywords, k)
 		}

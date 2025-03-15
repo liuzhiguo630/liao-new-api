@@ -1,16 +1,5 @@
 package dto
 
-type TextResponseWithError struct {
-	Id      string                        `json:"id"`
-	Object  string                        `json:"object"`
-	Created int64                         `json:"created"`
-	Choices []OpenAITextResponseChoice    `json:"choices"`
-	Data    []OpenAIEmbeddingResponseItem `json:"data"`
-	Model   string                        `json:"model"`
-	Usage   `json:"usage"`
-	Error   OpenAIError `json:"error"`
-}
-
 type SimpleResponse struct {
 	Usage   `json:"usage"`
 	Error   OpenAIError                `json:"error"`
@@ -62,9 +51,11 @@ type ChatCompletionsStreamResponseChoice struct {
 }
 
 type ChatCompletionsStreamResponseChoiceDelta struct {
-	Content   *string    `json:"content,omitempty"`
-	Role      string     `json:"role,omitempty"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Content          *string            `json:"content,omitempty"`
+	ReasoningContent *string            `json:"reasoning_content,omitempty"`
+	Reasoning        *string            `json:"reasoning,omitempty"`
+	Role             string             `json:"role,omitempty"`
+	ToolCalls        []ToolCallResponse `json:"tool_calls,omitempty"`
 }
 
 func (c *ChatCompletionsStreamResponseChoiceDelta) SetContentString(s string) {
@@ -78,24 +69,39 @@ func (c *ChatCompletionsStreamResponseChoiceDelta) GetContentString() string {
 	return *c.Content
 }
 
-type ToolCall struct {
-	// Index is not nil only in chat completion chunk object
-	Index    *int         `json:"index,omitempty"`
-	ID       string       `json:"id,omitempty"`
-	Type     any          `json:"type"`
-	Function FunctionCall `json:"function"`
+func (c *ChatCompletionsStreamResponseChoiceDelta) GetReasoningContent() string {
+	if c.ReasoningContent == nil && c.Reasoning == nil {
+		return ""
+	}
+	if c.ReasoningContent != nil {
+		return *c.ReasoningContent
+	}
+	return *c.Reasoning
 }
 
-func (c *ToolCall) SetIndex(i int) {
+func (c *ChatCompletionsStreamResponseChoiceDelta) SetReasoningContent(s string) {
+	c.ReasoningContent = &s
+	c.Reasoning = &s
+}
+
+type ToolCallResponse struct {
+	// Index is not nil only in chat completion chunk object
+	Index    *int             `json:"index,omitempty"`
+	ID       string           `json:"id,omitempty"`
+	Type     any              `json:"type"`
+	Function FunctionResponse `json:"function"`
+}
+
+func (c *ToolCallResponse) SetIndex(i int) {
 	c.Index = &i
 }
 
-type FunctionCall struct {
+type FunctionResponse struct {
 	Description string `json:"description,omitempty"`
 	Name        string `json:"name,omitempty"`
 	// call function with arguments in JSON format
 	Parameters any    `json:"parameters,omitempty"` // request
-	Arguments  string `json:"arguments,omitempty"`
+	Arguments  string `json:"arguments"`            // response
 }
 
 type ChatCompletionsStreamResponse struct {
@@ -106,6 +112,34 @@ type ChatCompletionsStreamResponse struct {
 	SystemFingerprint *string                               `json:"system_fingerprint"`
 	Choices           []ChatCompletionsStreamResponseChoice `json:"choices"`
 	Usage             *Usage                                `json:"usage"`
+}
+
+func (c *ChatCompletionsStreamResponse) IsToolCall() bool {
+	if len(c.Choices) == 0 {
+		return false
+	}
+	return len(c.Choices[0].Delta.ToolCalls) > 0
+}
+
+func (c *ChatCompletionsStreamResponse) GetFirstToolCall() *ToolCallResponse {
+	if c.IsToolCall() {
+		return &c.Choices[0].Delta.ToolCalls[0]
+	}
+	return nil
+}
+
+func (c *ChatCompletionsStreamResponse) Copy() *ChatCompletionsStreamResponse {
+	choices := make([]ChatCompletionsStreamResponseChoice, len(c.Choices))
+	copy(choices, c.Choices)
+	return &ChatCompletionsStreamResponse{
+		Id:                c.Id,
+		Object:            c.Object,
+		Created:           c.Created,
+		Model:             c.Model,
+		SystemFingerprint: c.SystemFingerprint,
+		Choices:           choices,
+		Usage:             c.Usage,
+	}
 }
 
 func (c *ChatCompletionsStreamResponse) GetSystemFingerprint() string {
@@ -135,6 +169,7 @@ type Usage struct {
 	PromptTokens           int                `json:"prompt_tokens"`
 	CompletionTokens       int                `json:"completion_tokens"`
 	TotalTokens            int                `json:"total_tokens"`
+	PromptCacheHitTokens   int                `json:"prompt_cache_hit_tokens,omitempty"`
 	PromptTokensDetails    InputTokenDetails  `json:"prompt_tokens_details"`
 	CompletionTokenDetails OutputTokenDetails `json:"completion_tokens_details"`
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"one-api/common"
 	"one-api/dto"
+	"one-api/relay/helper"
 	"one-api/service"
 	"strings"
 	"sync"
@@ -90,8 +91,7 @@ func requestOpenAI2Zhipu(request dto.GeneralOpenAIRequest) *dto.GeneralOpenAIReq
 					mediaMessages[j] = mediaMessage
 				}
 			}
-			messageRaw, _ := json.Marshal(mediaMessages)
-			message.Content = messageRaw
+			message.SetMediaContent(mediaMessages)
 		}
 		messages = append(messages, dto.Message{
 			Role:       message.Role,
@@ -198,7 +198,7 @@ func zhipuStreamHandler(c *gin.Context, resp *http.Response) (*dto.OpenAIErrorWi
 		}
 		stopChan <- true
 	}()
-	service.SetEventStreamHeaders(c)
+	helper.SetEventStreamHeaders(c)
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case data := <-dataChan:

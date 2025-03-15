@@ -8,25 +8,31 @@ import { isRoot } from '../../helpers';
 import OtherSetting from '../../components/OtherSetting';
 import PersonalSetting from '../../components/PersonalSetting';
 import OperationSetting from '../../components/OperationSetting';
+import RateLimitSetting from '../../components/RateLimitSetting.js';
+import ModelSetting from '../../components/ModelSetting.js';
 
 const Setting = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [tabActiveKey, setTabActiveKey] = useState('1');
-  let panes = [
-    {
-      tab: t('个人设置'),
-      content: <PersonalSetting />,
-      itemKey: 'personal',
-    },
-  ];
+  let panes = [];
 
   if (isRoot()) {
     panes.push({
       tab: t('运营设置'),
       content: <OperationSetting />,
       itemKey: 'operation',
+    });
+    panes.push({
+      tab: t('速率限制设置'),
+      content: <RateLimitSetting />,
+      itemKey: 'ratelimit',
+    });
+    panes.push({
+      tab: t('模型相关设置'),
+      content: <ModelSetting />,
+      itemKey: 'models',
     });
     panes.push({
       tab: t('系统设置'),
@@ -49,7 +55,7 @@ const Setting = () => {
     if (tab) {
       setTabActiveKey(tab);
     } else {
-      onChangeTab('personal');
+      onChangeTab('operation');
     }
   }, [location.search]);
   return (

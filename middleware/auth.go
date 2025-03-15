@@ -174,6 +174,14 @@ func TokenAuth() func(c *gin.Context) {
 			}
 			c.Request.Header.Set("Authorization", "Bearer "+key)
 		}
+		// 检查path包含/v1/messages
+		if strings.Contains(c.Request.URL.Path, "/v1/messages") {
+			// 从x-api-key中获取key
+			key := c.Request.Header.Get("x-api-key")
+			if key != "" {
+				c.Request.Header.Set("Authorization", "Bearer "+key)
+			}
+		}
 		key := c.Request.Header.Get("Authorization")
 		parts := make([]string, 0)
 		key = strings.TrimPrefix(key, "Bearer ")
@@ -199,15 +207,19 @@ func TokenAuth() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusUnauthorized, err.Error())
 			return
 		}
-		userEnabled, err := model.IsUserEnabled(token.UserId, false)
+		userCache, err := model.GetUserCache(token.UserId)
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusInternalServerError, err.Error())
 			return
 		}
+		userEnabled := userCache.Status == common.UserStatusEnabled
 		if !userEnabled {
 			abortWithOpenAiMessage(c, http.StatusForbidden, "用户已被封禁")
 			return
 		}
+
+		userCache.WriteContext(c)
+
 		c.Set("id", token.UserId)
 		c.Set("token_id", token.Id)
 		c.Set("token_key", token.Key)

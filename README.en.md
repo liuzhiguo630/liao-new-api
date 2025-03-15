@@ -63,10 +63,20 @@
     - Add suffix `-high` to set high reasoning effort (e.g., `o3-mini-high`)
     - Add suffix `-medium` to set medium reasoning effort
     - Add suffix `-low` to set low reasoning effort
+17. 🔄 Thinking to content option `thinking_to_content` in `Channel->Edit->Channel Extra Settings`, default is `false`, when `true`, the `reasoning_content` of the thinking content will be converted to `<think>` tags and concatenated to the content returned.
+18. 🔄 Model rate limit, support setting total request limit and successful request limit in `System Settings->Rate Limit Settings`
+19. 💰 Cache billing support, when enabled can charge a configurable ratio for cache hits:
+    1. Set `Prompt Cache Ratio` in `System Settings -> Operation Settings`
+    2. Set `Prompt Cache Ratio` in channel settings, range 0-1 (e.g., 0.5 means 50% charge on cache hits)
+    3. Supported channels:
+        - [x] OpenAI
+        - [x] Azure 
+        - [x] DeepSeek
+        - [ ] Claude
 
 ## Model Support
 This version additionally supports:
-1. Third-party model **gps** (gpt-4-gizmo-*)
+1. Third-party model **gpts** (gpt-4-gizmo-*)
 2. [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) interface, [Integration Guide](Midjourney.md)
 3. Custom channels with full API URL support
 4. [Suno API](https://github.com/Suno-API/Suno-API) interface, [Integration Guide](Suno.md)
@@ -89,6 +99,8 @@ You can add custom models gpt-4-gizmo-* in channels. These are third-party model
 - `MAX_FILE_DOWNLOAD_MB`: Maximum file download size in MB, default `20`
 - `CRYPTO_SECRET`: Encryption key for encrypting database content
 - `AZURE_DEFAULT_API_VERSION`: Azure channel default API version, if not specified in channel settings, use this version, default `2024-12-01-preview`
+- `NOTIFICATION_LIMIT_DURATION_MINUTE`: Duration of notification limit in minutes, default `10`
+- `NOTIFY_LIMIT_COUNT`: Maximum number of user notifications in the specified duration, default `2`
 
 ## Deployment
 
@@ -158,7 +170,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtow
 
 ## Channel Retry
 Channel retry is implemented, configurable in `Settings->Operation Settings->General Settings`. **Cache recommended**.  
-First retry uses same priority, second retry uses next priority, and so on.
+If retry is enabled, the system will automatically use the next priority channel for the same request after a failed request.
 
 ### Cache Configuration
 1. `REDIS_CONN_STRING`: Use Redis as cache
