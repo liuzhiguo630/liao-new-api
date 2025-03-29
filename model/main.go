@@ -146,7 +146,7 @@ func InitDB() (err error) {
 		sqlDB.SetMaxOpenConns(common.GetEnvOrDefault("SQL_MAX_OPEN_CONNS", 1000))
 		sqlDB.SetConnMaxLifetime(time.Second * time.Duration(common.GetEnvOrDefault("SQL_MAX_LIFETIME", 60)))
 
-		if !common.IsMasterNode {
+		if os.Getenv("NODE_TYPE") == "slave" {
 			return nil
 		}
 		if common.UsingMySQL {
@@ -190,7 +190,7 @@ func InitLogDB() (err error) {
 		//	_, _ = sqlDB.Exec("ALTER TABLE midjourneys MODIFY status VARCHAR(20);")   // TODO: delete this line when most users have upgraded
 		//}
 		common.SysLog("database migration started")
-		err = migrateLOGDB()
+		//err = migrateLOGDB()
 		return err
 	} else {
 		common.FatalLog(err)

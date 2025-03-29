@@ -56,7 +56,7 @@ func main() {
 	model.CheckSetup()
 
 	// Initialize SQL Database
-	//err = model.InitLogDB()
+	err = model.InitLogDB()
 	if err != nil {
 		common.FatalLog("failed to initialize database: " + err.Error())
 	}
