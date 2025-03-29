@@ -116,10 +116,10 @@ func RecordConsumeLog(c *gin.Context, userId int, channelId int, promptTokens in
 		Other:            otherStr,
 	}
 	print(log)
-	//err := LOG_DB.Create(log).Error
-	//if err != nil {
-	//	common.LogError(c, "failed to record log: "+err.Error())
-	//}
+	err := LOG_DB.Create(log).Error
+	if err != nil {
+		common.LogError(c, "failed to record log: "+err.Error())
+	}
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, modelName, quota, common.GetTimestamp(), promptTokens+completionTokens)
