@@ -34,7 +34,7 @@ func OaiStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.Rel
 	toolCount := 0
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(bufio.ScanLines)
-
+	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
 	service.SetEventStreamHeaders(c)
 
 	ticker := time.NewTicker(time.Duration(constant.StreamingTimeout) * time.Second)
