@@ -66,7 +66,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	scanner.Buffer(make([]byte, InitialScannerBufferSize), MaxScannerBufferSize)
 	scanner.Split(bufio.ScanLines)
 	SetEventStreamHeaders(c)
-
+	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
