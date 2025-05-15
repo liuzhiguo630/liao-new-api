@@ -210,8 +210,11 @@ var (
 	modelRatioMap      map[string]float64 = nil
 	modelRatioMapMutex                    = sync.RWMutex{}
 )
+var (
+	CompletionRatio      map[string]float64 = nil
+	CompletionRatioMutex                    = sync.RWMutex{}
+)
 
-var CompletionRatio map[string]float64 = nil
 var defaultCompletionRatio = map[string]float64{
 	"gpt-4-gizmo-*":  2,
 	"gpt-4o-gizmo-*": 3,
@@ -313,6 +316,8 @@ func GetDefaultModelRatioMap() map[string]float64 {
 }
 
 func CompletionRatio2JSONString() string {
+	CompletionRatioMutex.Lock()
+	defer CompletionRatioMutex.Unlock()
 	if CompletionRatio == nil {
 		CompletionRatio = defaultCompletionRatio
 	}
@@ -324,11 +329,15 @@ func CompletionRatio2JSONString() string {
 }
 
 func UpdateCompletionRatioByJSONString(jsonStr string) error {
+	CompletionRatioMutex.Lock()
+	defer CompletionRatioMutex.Unlock()
 	CompletionRatio = make(map[string]float64)
 	return json.Unmarshal([]byte(jsonStr), &CompletionRatio)
 }
 
 func GetCompletionRatio(name string) float64 {
+	CompletionRatioMutex.RLock()
+	defer CompletionRatioMutex.RUnlock()
 	if strings.HasPrefix(name, "gpt-4-gizmo") {
 		name = "gpt-4-gizmo-*"
 	}
