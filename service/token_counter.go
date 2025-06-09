@@ -93,7 +93,7 @@ func getTokenEncoder(model string) *tiktoken.Tiktoken {
 	return getModelDefaultTokenEncoder(model)
 }
 
-func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string, model string) int {
+func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
 	// 生成缓存key: 编码器指针地址 + 文本内容的MD5
 	cacheKey := fmt.Sprintf("%p_%x", tokenEncoder, md5.Sum([]byte(text)))
 
@@ -106,10 +106,7 @@ func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string, model string) int
 	tokenCacheMutex.RUnlock()
 
 	// 缓存未命中，计算token数量
-	start := time.Now().UnixMilli()
 	tokenCount := len(tokenEncoder.Encode(text, nil, nil))
-	end := time.Now().UnixMilli()
-	log.Printf("token encode elasped %vms, model: %v \n", end-start, model)
 
 	// 存入缓存
 	tokenCacheMutex.Lock()
@@ -247,16 +244,19 @@ func CountTokenMessages(messages []dto.Message, model string, stream bool) (int,
 		tokensPerName = 1
 	}
 	tokenNum := 0
+	messageLength := 0
+	start := time.Now().UnixMilli()
 	for _, message := range messages {
 		tokenNum += tokensPerMessage
-		tokenNum += getTokenNum(tokenEncoder, message.Role, model)
+		tokenNum += getTokenNum(tokenEncoder, message.Role)
 		if len(message.Content) > 0 {
 			if message.IsStringContent() {
 				stringContent := message.StringContent()
-				tokenNum += getTokenNum(tokenEncoder, stringContent, model)
+				messageLength += len(stringContent)
+				tokenNum += getTokenNum(tokenEncoder, stringContent)
 				if message.Name != nil {
 					tokenNum += tokensPerName
-					tokenNum += getTokenNum(tokenEncoder, *message.Name, model)
+					tokenNum += getTokenNum(tokenEncoder, *message.Name)
 				}
 			} else {
 				arrayContent := message.ParseContent()
@@ -270,13 +270,15 @@ func CountTokenMessages(messages []dto.Message, model string, stream bool) (int,
 						tokenNum += imageTokenNum
 						log.Printf("image token num: %d", imageTokenNum)
 					} else {
-						tokenNum += getTokenNum(tokenEncoder, m.Text, model)
+						tokenNum += getTokenNum(tokenEncoder, m.Text)
+						messageLength += len(m.Text)
 					}
 				}
 			}
 		}
 	}
 	tokenNum += 3 // Every reply is primed with <|start|>assistant<|message|>
+	log.Printf("token encode elasped %vms, model: %v, tokenNum: %v, messageLength: %v \n", time.Now().UnixMilli()-start, model, tokenNum, messageLength)
 	return tokenNum, nil
 }
 
@@ -323,5 +325,5 @@ func CountAudioToken(text string, model string) (int, error) {
 func CountTokenText(text string, model string) (int, error) {
 	var err error
 	tokenEncoder := getTokenEncoder(model)
-	return getTokenNum(tokenEncoder, text, ""), err
+	return getTokenNum(tokenEncoder, text), err
 }
