@@ -1,9 +1,12 @@
 package service
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang/groupcache/lru"
+	"github.com/pkoukk/tiktoken-go"
 	"image"
 	"log"
 	"math"
@@ -13,15 +16,25 @@ import (
 	relaycommon "one-api/relay/common"
 	"one-api/setting/operation_setting"
 	"strings"
+	"sync"
 	"unicode/utf8"
-
-	"github.com/pkoukk/tiktoken-go"
 )
 
 // tokenEncoderMap won't grow after initialization
 var tokenEncoderMap = map[string]*tiktoken.Tiktoken{}
 var defaultTokenEncoder *tiktoken.Tiktoken
 var o200kTokenEncoder *tiktoken.Tiktoken
+
+// Token计算缓存
+var (
+	tokenCache      *lru.Cache
+	tokenCacheMutex sync.RWMutex
+)
+
+func init() {
+	// 初始化token缓存，最多缓存200000个结果
+	tokenCache = lru.New(200000)
+}
 
 func InitTokenEncoders() {
 	common.SysLog("initializing token encoders")
@@ -79,10 +92,41 @@ func getTokenEncoder(model string) *tiktoken.Tiktoken {
 }
 
 func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
-	if text == "" {
-		return 0
+	const MAX_CHUNK_SIZE = 10000 // 10KB 分块处理
+	// 分块处理长文本
+	totalTokens := 0
+	for i := 0; i < len(text); i += MAX_CHUNK_SIZE {
+		end := i + MAX_CHUNK_SIZE
+		if end > len(text) {
+			end = len(text)
+		}
+		chunk := text[i:end]
+		totalTokens += getTokenNumCached(tokenEncoder, chunk)
 	}
-	return len(tokenEncoder.Encode(text, nil, nil))
+	return totalTokens
+}
+
+func getTokenNumCached(tokenEncoder *tiktoken.Tiktoken, text string) int {
+	// 生成缓存key: 编码器指针地址 + 文本内容的MD5
+	cacheKey := fmt.Sprintf("%p_%x", tokenEncoder, md5.Sum([]byte(text)))
+
+	// 先尝试从缓存获取
+	tokenCacheMutex.RLock()
+	if cached, ok := tokenCache.Get(cacheKey); ok {
+		tokenCacheMutex.RUnlock()
+		return cached.(int)
+	}
+	tokenCacheMutex.RUnlock()
+
+	// 缓存未命中，计算token数量
+	tokenCount := len(tokenEncoder.Encode(text, nil, nil))
+
+	// 存入缓存
+	tokenCacheMutex.Lock()
+	tokenCache.Add(cacheKey, tokenCount)
+	tokenCacheMutex.Unlock()
+
+	return tokenCount
 }
 
 func getImageToken(info *relaycommon.RelayInfo, imageUrl *dto.MessageImageUrl, model string, stream bool) (int, error) {
