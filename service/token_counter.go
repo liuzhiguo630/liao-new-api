@@ -13,6 +13,7 @@ import (
 	"one-api/dto"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/golang/groupcache/lru"
@@ -32,7 +33,7 @@ var (
 
 func init() {
 	// 初始化token缓存，最多缓存10000个结果
-	tokenCache = lru.New(10000)
+	tokenCache = lru.New(100000)
 }
 
 func InitTokenEncoders() {
@@ -92,7 +93,7 @@ func getTokenEncoder(model string) *tiktoken.Tiktoken {
 	return getModelDefaultTokenEncoder(model)
 }
 
-func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
+func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string, model string) int {
 	// 生成缓存key: 编码器指针地址 + 文本内容的MD5
 	cacheKey := fmt.Sprintf("%p_%x", tokenEncoder, md5.Sum([]byte(text)))
 
@@ -105,7 +106,10 @@ func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
 	tokenCacheMutex.RUnlock()
 
 	// 缓存未命中，计算token数量
+	start := time.Now().UnixMilli()
 	tokenCount := len(tokenEncoder.Encode(text, nil, nil))
+	end := time.Now().UnixMilli()
+	log.Printf("token encode elasped %vms, model: %v \n", end-start, model)
 
 	// 存入缓存
 	tokenCacheMutex.Lock()
@@ -245,14 +249,14 @@ func CountTokenMessages(messages []dto.Message, model string, stream bool) (int,
 	tokenNum := 0
 	for _, message := range messages {
 		tokenNum += tokensPerMessage
-		tokenNum += getTokenNum(tokenEncoder, message.Role)
+		tokenNum += getTokenNum(tokenEncoder, message.Role, model)
 		if len(message.Content) > 0 {
 			if message.IsStringContent() {
 				stringContent := message.StringContent()
-				tokenNum += getTokenNum(tokenEncoder, stringContent)
+				tokenNum += getTokenNum(tokenEncoder, stringContent, model)
 				if message.Name != nil {
 					tokenNum += tokensPerName
-					tokenNum += getTokenNum(tokenEncoder, *message.Name)
+					tokenNum += getTokenNum(tokenEncoder, *message.Name, model)
 				}
 			} else {
 				arrayContent := message.ParseContent()
@@ -266,7 +270,7 @@ func CountTokenMessages(messages []dto.Message, model string, stream bool) (int,
 						tokenNum += imageTokenNum
 						log.Printf("image token num: %d", imageTokenNum)
 					} else {
-						tokenNum += getTokenNum(tokenEncoder, m.Text)
+						tokenNum += getTokenNum(tokenEncoder, m.Text, model)
 					}
 				}
 			}
@@ -319,5 +323,5 @@ func CountAudioToken(text string, model string) (int, error) {
 func CountTokenText(text string, model string) (int, error) {
 	var err error
 	tokenEncoder := getTokenEncoder(model)
-	return getTokenNum(tokenEncoder, text), err
+	return getTokenNum(tokenEncoder, text, ""), err
 }
