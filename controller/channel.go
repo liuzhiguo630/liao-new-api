@@ -119,8 +119,11 @@ func FetchUpstreamModels(c *gin.Context) {
 		baseURL = channel.GetBaseURL()
 	}
 	url := fmt.Sprintf("%s/v1/models", baseURL)
-	if channel.Type == common.ChannelTypeGemini {
+	switch channel.Type {
+	case common.ChannelTypeGemini:
 		url = fmt.Sprintf("%s/v1beta/openai/models", baseURL)
+	case common.ChannelTypeAli:
+		url = fmt.Sprintf("%s/compatible-mode/v1/models", baseURL)
 	}
 	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
 	if err != nil {
@@ -617,6 +620,47 @@ func BatchSetChannelTag(c *gin.Context) {
 		"success": true,
 		"message": "",
 		"data":    len(channelBatch.Ids),
+	})
+	return
+}
+
+func GetTagModels(c *gin.Context) {
+	tag := c.Query("tag")
+	if tag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "tag不能为空",
+		})
+		return
+	}
+
+	channels, err := model.GetChannelsByTag(tag, false) // Assuming false for idSort is fine here
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	var longestModels string
+	maxLength := 0
+
+	// Find the longest models string among all channels with the given tag
+	for _, channel := range channels {
+		if channel.Models != "" {
+			currentModels := strings.Split(channel.Models, ",")
+			if len(currentModels) > maxLength {
+				maxLength = len(currentModels)
+				longestModels = channel.Models
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    longestModels,
 	})
 	return
 }
