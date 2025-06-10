@@ -94,6 +94,21 @@ func getTokenEncoder(model string) *tiktoken.Tiktoken {
 }
 
 func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
+	const MAX_CHUNK_SIZE = 10000 // 10KB 分块处理
+	// 分块处理长文本
+	totalTokens := 0
+	for i := 0; i < len(text); i += MAX_CHUNK_SIZE {
+		end := i + MAX_CHUNK_SIZE
+		if end > len(text) {
+			end = len(text)
+		}
+		chunk := text[i:end]
+		totalTokens += getTokenNumCached(tokenEncoder, chunk)
+	}
+	return totalTokens
+}
+
+func getTokenNumCached(tokenEncoder *tiktoken.Tiktoken, text string) int {
 	// 生成缓存key: 编码器指针地址 + 文本内容的MD5
 	cacheKey := fmt.Sprintf("%p_%x", tokenEncoder, md5.Sum([]byte(text)))
 
