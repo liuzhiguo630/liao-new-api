@@ -20,7 +20,7 @@ import {
   renderQuota,
   stringToColor,
   getLogOther,
-  renderModelTag
+  renderModelTag,
 } from '../../helpers';
 
 import {
@@ -39,15 +39,17 @@ import {
   Card,
   Typography,
   Divider,
-  Form
+  Form,
 } from '@douyinfe/semi-ui';
 import {
   IllustrationNoResult,
-  IllustrationNoResultDark
+  IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
 import { ITEMS_PER_PAGE } from '../../constants';
 import Paragraph from '@douyinfe/semi-ui/lib/es/typography/paragraph';
-import { IconSetting, IconSearch, IconForward } from '@douyinfe/semi-icons';
+import { IconSearch, IconHelpCircle } from '@douyinfe/semi-icons';
+import { Route } from 'lucide-react';
+import { useTableCompactMode } from '../../hooks/useTableCompactMode';
 
 const { Text } = Typography;
 
@@ -232,6 +234,11 @@ const LogsTable = () => {
                 onClick: (event) => {
                   copyText(event, record.model_name).then((r) => { });
                 },
+                suffixIcon: (
+                  <Route
+                    style={{ width: '0.9em', height: '0.9em', opacity: 0.75 }}
+                  />
+                ),
               })}
             </Popover>
           </Space>
@@ -254,6 +261,7 @@ const LogsTable = () => {
     COMPLETION: 'completion',
     COST: 'cost',
     RETRY: 'retry',
+    IP: 'ip',
     DETAILS: 'details',
   };
 
@@ -295,6 +303,7 @@ const LogsTable = () => {
       [COLUMN_KEYS.COMPLETION]: true,
       [COLUMN_KEYS.COST]: true,
       [COLUMN_KEYS.RETRY]: isAdminUser,
+      [COLUMN_KEYS.IP]: true,
       [COLUMN_KEYS.DETAILS]: true,
     };
   };
@@ -479,6 +488,9 @@ const LogsTable = () => {
       title: t('用时/首字'),
       dataIndex: 'use_time',
       render: (text, record, index) => {
+        if (!(record.type === 2 || record.type === 5)) {
+          return <></>;
+        }
         if (record.is_stream) {
           let other = getLogOther(record.other);
           return (
@@ -540,11 +552,44 @@ const LogsTable = () => {
       },
     },
     {
+      key: COLUMN_KEYS.IP,
+      title: (
+        <div className="flex items-center gap-1">
+          {t('IP')}
+          <Tooltip content={t('只有当用户设置开启IP记录时，才会进行请求和错误类型日志的IP记录')}>
+            <IconHelpCircle className="text-gray-400 cursor-help" />
+          </Tooltip>
+        </div>
+      ),
+      dataIndex: 'ip',
+      render: (text, record, index) => {
+        return (record.type === 2 || record.type === 5) && text ? (
+          <Tooltip content={text}>
+            <Tag
+              color='orange'
+              size='large'
+              shape='circle'
+              onClick={(event) => {
+                copyText(event, text);
+              }}
+            >
+              {text}
+            </Tag>
+          </Tooltip>
+        ) : (
+          <></>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.RETRY,
       title: t('重试'),
       dataIndex: 'retry',
       className: isAdmin() ? 'tableShow' : 'tableHiddle',
       render: (text, record, index) => {
+        if (!(record.type === 2 || record.type === 5)) {
+          return <></>;
+        }
         let content = t('渠道') + `：${record.channel}`;
         if (record.other !== '') {
           let other = JSON.parse(record.other);
@@ -595,6 +640,7 @@ const LogsTable = () => {
             other.model_ratio,
             other.model_price,
             other.group_ratio,
+            other?.user_group_ratio,
             other.cache_tokens || 0,
             other.cache_ratio || 1.0,
             other.cache_creation_tokens || 0,
@@ -604,6 +650,7 @@ const LogsTable = () => {
             other.model_ratio,
             other.model_price,
             other.group_ratio,
+            other?.user_group_ratio,
             other.cache_tokens || 0,
             other.cache_ratio || 1.0,
           );
@@ -649,21 +696,18 @@ const LogsTable = () => {
             <Button
               theme='light'
               onClick={() => initDefaultColumns()}
-              className='!rounded-full'
             >
               {t('重置')}
             </Button>
             <Button
               theme='light'
               onClick={() => setShowColumnSelector(false)}
-              className='!rounded-full'
             >
               {t('取消')}
             </Button>
             <Button
               type='primary'
               onClick={() => setShowColumnSelector(false)}
-              className='!rounded-full'
             >
               {t('确定')}
             </Button>
@@ -736,7 +780,7 @@ const LogsTable = () => {
     group: '',
     dateRange: [
       timestamp2string(getTodayStartTimestamp()),
-      timestamp2string(now.getTime() / 1000 + 3600)
+      timestamp2string(now.getTime() / 1000 + 3600),
     ],
     logType: '0',
   };
@@ -757,7 +801,11 @@ const LogsTable = () => {
     let start_timestamp = timestamp2string(getTodayStartTimestamp());
     let end_timestamp = timestamp2string(now.getTime() / 1000 + 3600);
 
-    if (formValues.dateRange && Array.isArray(formValues.dateRange) && formValues.dateRange.length === 2) {
+    if (
+      formValues.dateRange &&
+      Array.isArray(formValues.dateRange) &&
+      formValues.dateRange.length === 2
+    ) {
       start_timestamp = formValues.dateRange[0];
       end_timestamp = formValues.dateRange[1];
     }
@@ -939,6 +987,7 @@ const LogsTable = () => {
               other.completion_ratio,
               other.model_price,
               other.group_ratio,
+              other?.user_group_ratio,
               other.cache_ratio || 1.0,
               other.cache_creation_ratio || 1.0,
             )
@@ -950,7 +999,6 @@ const LogsTable = () => {
               other?.user_group_ratio,
               false,
               1.0,
-              undefined,
               other.web_search || false,
               other.web_search_call_count || 0,
               other.file_search || false,
@@ -986,6 +1034,7 @@ const LogsTable = () => {
             other?.audio_ratio,
             other?.audio_completion_ratio,
             other?.group_ratio,
+            other?.user_group_ratio,
             other?.cache_tokens || 0,
             other?.cache_ratio || 1.0,
           );
@@ -997,6 +1046,7 @@ const LogsTable = () => {
             other.model_price,
             other.completion_ratio,
             other.group_ratio,
+            other?.user_group_ratio,
             other.cache_tokens || 0,
             other.cache_ratio || 1.0,
             other.cache_creation_tokens || 0,
@@ -1010,6 +1060,7 @@ const LogsTable = () => {
             other?.model_price,
             other?.completion_ratio,
             other?.group_ratio,
+            other?.user_group_ratio,
             other?.cache_tokens || 0,
             other?.cache_ratio || 1.0,
             other?.image || false,
@@ -1060,7 +1111,12 @@ const LogsTable = () => {
     } = getFormValues();
 
     // 使用传入的 logType 或者表单中的 logType 或者状态中的 logType
-    const currentLogType = customLogType !== null ? customLogType : formLogType !== undefined ? formLogType : logType;
+    const currentLogType =
+      customLogType !== null
+        ? customLogType
+        : formLogType !== undefined
+          ? formLogType
+          : logType;
 
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
@@ -1145,6 +1201,8 @@ const LogsTable = () => {
     );
   };
 
+  const [compactMode, setCompactMode] = useTableCompactMode('logs');
+
   return (
     <>
       {renderColumnSelector()}
@@ -1153,45 +1211,56 @@ const LogsTable = () => {
         title={
           <div className='flex flex-col w-full'>
             <Spin spinning={loadingStat}>
-              <Space>
-                <Tag
-                  color='blue'
-                  size='large'
-                  style={{
-                    padding: 15,
-                    borderRadius: '9999px',
-                    fontWeight: 500,
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                  }}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 w-full">
+                <Space>
+                  <Tag
+                    color='blue'
+                    size='large'
+                    style={{
+                      padding: 15,
+                      fontWeight: 500,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                    }}
+                    className='!rounded-lg'
+                  >
+                    {t('消耗额度')}: {renderQuota(stat.quota)}
+                  </Tag>
+                  <Tag
+                    color='pink'
+                    size='large'
+                    style={{
+                      padding: 15,
+                      fontWeight: 500,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                    }}
+                    className='!rounded-lg'
+                  >
+                    RPM: {stat.rpm}
+                  </Tag>
+                  <Tag
+                    color='white'
+                    size='large'
+                    style={{
+                      padding: 15,
+                      border: 'none',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                      fontWeight: 500,
+                    }}
+                    className='!rounded-lg'
+                  >
+                    TPM: {stat.tpm}
+                  </Tag>
+                </Space>
+
+                <Button
+                  theme='light'
+                  type='secondary'
+                  className="w-full md:w-auto"
+                  onClick={() => setCompactMode(!compactMode)}
                 >
-                  {t('消耗额度')}: {renderQuota(stat.quota)}
-                </Tag>
-                <Tag
-                  color='pink'
-                  size='large'
-                  style={{
-                    padding: 15,
-                    borderRadius: '9999px',
-                    fontWeight: 500,
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                  }}
-                >
-                  RPM: {stat.rpm}
-                </Tag>
-                <Tag
-                  color='white'
-                  size='large'
-                  style={{
-                    padding: 15,
-                    border: 'none',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                    borderRadius: '9999px',
-                    fontWeight: 500,
-                  }}
-                >
-                  TPM: {stat.tpm}
-                </Tag>
-              </Space>
+                  {compactMode ? t('自适应列表') : t('紧凑列表')}
+                </Button>
+              </div>
             </Spin>
 
             <Divider margin='12px' />
@@ -1202,9 +1271,9 @@ const LogsTable = () => {
               getFormApi={(api) => setFormApi(api)}
               onSubmit={refresh}
               allowEmpty={true}
-              autoComplete="off"
-              layout="vertical"
-              trigger="change"
+              autoComplete='off'
+              layout='vertical'
+              trigger='change'
               stopValidateWithError={false}
             >
               <div className='flex flex-col gap-4'>
@@ -1226,7 +1295,6 @@ const LogsTable = () => {
                     field='token_name'
                     prefix={<IconSearch />}
                     placeholder={t('令牌名称')}
-                    className='!rounded-full'
                     showClear
                     pure
                   />
@@ -1235,7 +1303,6 @@ const LogsTable = () => {
                     field='model_name'
                     prefix={<IconSearch />}
                     placeholder={t('模型名称')}
-                    className='!rounded-full'
                     showClear
                     pure
                   />
@@ -1244,7 +1311,6 @@ const LogsTable = () => {
                     field='group'
                     prefix={<IconSearch />}
                     placeholder={t('分组')}
-                    className='!rounded-full'
                     showClear
                     pure
                   />
@@ -1255,7 +1321,6 @@ const LogsTable = () => {
                         field='channel'
                         prefix={<IconSearch />}
                         placeholder={t('渠道 ID')}
-                        className='!rounded-full'
                         showClear
                         pure
                       />
@@ -1263,7 +1328,6 @@ const LogsTable = () => {
                         field='username'
                         prefix={<IconSearch />}
                         placeholder={t('用户名称')}
-                        className='!rounded-full'
                         showClear
                         pure
                       />
@@ -1278,7 +1342,7 @@ const LogsTable = () => {
                     <Form.Select
                       field='logType'
                       placeholder={t('日志类型')}
-                      className='!rounded-full w-full sm:w-auto min-w-[120px]'
+                      className='w-full sm:w-auto min-w-[120px]'
                       showClear
                       pure
                       onChange={() => {
@@ -1288,12 +1352,24 @@ const LogsTable = () => {
                         }, 0);
                       }}
                     >
-                      <Form.Select.Option value='0'>{t('全部')}</Form.Select.Option>
-                      <Form.Select.Option value='1'>{t('充值')}</Form.Select.Option>
-                      <Form.Select.Option value='2'>{t('消费')}</Form.Select.Option>
-                      <Form.Select.Option value='3'>{t('管理')}</Form.Select.Option>
-                      <Form.Select.Option value='4'>{t('系统')}</Form.Select.Option>
-                      <Form.Select.Option value='5'>{t('错误')}</Form.Select.Option>
+                      <Form.Select.Option value='0'>
+                        {t('全部')}
+                      </Form.Select.Option>
+                      <Form.Select.Option value='1'>
+                        {t('充值')}
+                      </Form.Select.Option>
+                      <Form.Select.Option value='2'>
+                        {t('消费')}
+                      </Form.Select.Option>
+                      <Form.Select.Option value='3'>
+                        {t('管理')}
+                      </Form.Select.Option>
+                      <Form.Select.Option value='4'>
+                        {t('系统')}
+                      </Form.Select.Option>
+                      <Form.Select.Option value='5'>
+                        {t('错误')}
+                      </Form.Select.Option>
                     </Form.Select>
                   </div>
 
@@ -1302,7 +1378,6 @@ const LogsTable = () => {
                       type='primary'
                       htmlType='submit'
                       loading={loading}
-                      className='!rounded-full'
                     >
                       {t('查询')}
                     </Button>
@@ -1312,22 +1387,18 @@ const LogsTable = () => {
                         if (formApi) {
                           formApi.reset();
                           setLogType(0);
-                          // 重置后立即查询，使用setTimeout确保表单重置完成
                           setTimeout(() => {
                             refresh();
                           }, 100);
                         }
                       }}
-                      className='!rounded-full'
                     >
                       {t('重置')}
                     </Button>
                     <Button
                       theme='light'
                       type='tertiary'
-                      icon={<IconSetting />}
                       onClick={() => setShowColumnSelector(true)}
-                      className='!rounded-full'
                     >
                       {t('列设置')}
                     </Button>
@@ -1341,22 +1412,27 @@ const LogsTable = () => {
         bordered={false}
       >
         <Table
-          columns={getVisibleColumns()}
+          columns={compactMode ? getVisibleColumns().map(({ fixed, ...rest }) => rest) : getVisibleColumns()}
           {...(hasExpandableRows() && {
             expandedRowRender: expandRowRender,
             expandRowByClick: true,
-            rowExpandable: (record) => expandData[record.key] && expandData[record.key].length > 0
+            rowExpandable: (record) =>
+              expandData[record.key] && expandData[record.key].length > 0,
           })}
           dataSource={logs}
           rowKey='key'
           loading={loading}
-          scroll={{ x: 'max-content' }}
+          scroll={compactMode ? undefined : { x: 'max-content' }}
           className='rounded-xl overflow-hidden'
           size='middle'
           empty={
             <Empty
-              image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
-              darkModeImage={<IllustrationNoResultDark style={{ width: 150, height: 150 }} />}
+              image={
+                <IllustrationNoResult style={{ width: 150, height: 150 }} />
+              }
+              darkModeImage={
+                <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
+              }
               description={t('搜索无结果')}
               style={{ padding: 30 }}
             />
