@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/groupcache/lru"
-	"github.com/pkoukk/tiktoken-go"
 	"github.com/tiktoken-go/tokenizer"
 	"github.com/tiktoken-go/tokenizer/codec"
 	"image"
@@ -93,7 +92,7 @@ func getTokenNum(tokenEncoder tokenizer.Codec, text string) int {
 	return totalTokens
 }
 
-func getTokenNumCached(tokenEncoder *tokenizer.Codec, text string) int {
+func getTokenNumCached(tokenEncoder tokenizer.Codec, text string) int {
 	// 生成缓存key: 编码器指针地址 + 文本内容的MD5
 	cacheKey := fmt.Sprintf("%p_%x", tokenEncoder, md5.Sum([]byte(text)))
 
@@ -106,7 +105,7 @@ func getTokenNumCached(tokenEncoder *tokenizer.Codec, text string) int {
 	tokenCacheMutex.RUnlock()
 
 	// 缓存未命中，计算token数量
-	tokenCount,_ := tokenEncoder.Count(text)
+	tokenCount, _ := tokenEncoder.Count(text)
 
 	// 存入缓存
 	tokenCacheMutex.Lock()
