@@ -3,6 +3,7 @@ package aws
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/aws/smithy-go/auth/bearer"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"net/http"
@@ -20,16 +21,26 @@ import (
 
 func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.Client, error) {
 	awsSecret := strings.Split(info.ApiKey, "|")
-	if len(awsSecret) != 3 {
+	var client *bedrockruntime.Client
+	switch len(awsSecret) {
+	case 2:
+		apiKey := awsSecret[0]
+		region := awsSecret[1]
+		client = bedrockruntime.New(bedrockruntime.Options{
+			Region:                  region,
+			BearerAuthTokenProvider: bearer.StaticTokenProvider{Token: bearer.Token{Value: apiKey}},
+		})
+	case 3:
+		ak := awsSecret[0]
+		sk := awsSecret[1]
+		region := awsSecret[2]
+		client = bedrockruntime.New(bedrockruntime.Options{
+			Region:      region,
+			Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(ak, sk, "")),
+		})
+	default:
 		return nil, errors.New("invalid aws secret key")
 	}
-	ak := awsSecret[0]
-	sk := awsSecret[1]
-	region := awsSecret[2]
-	client := bedrockruntime.New(bedrockruntime.Options{
-		Region:      region,
-		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(ak, sk, "")),
-	})
 
 	return client, nil
 }
