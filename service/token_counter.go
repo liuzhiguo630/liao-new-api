@@ -94,18 +94,19 @@ func getTokenEncoder(model string) *tiktoken.Tiktoken {
 }
 
 func getTokenNum(tokenEncoder *tiktoken.Tiktoken, text string) int {
-	const MAX_CHUNK_SIZE = 10000 // 10KB 分块处理
-	// 分块处理长文本
-	totalTokens := 0
-	for i := 0; i < len(text); i += MAX_CHUNK_SIZE {
-		end := i + MAX_CHUNK_SIZE
-		if end > len(text) {
-			end = len(text)
-		}
-		chunk := text[i:end]
-		totalTokens += getTokenNumCached(tokenEncoder, chunk)
-	}
-	return totalTokens
+	return len(tokenEncoder.Encode(text, nil, nil))
+	//const MAX_CHUNK_SIZE = 10000 // 10KB 分块处理
+	//// 分块处理长文本
+	//totalTokens := 0
+	//for i := 0; i < len(text); i += MAX_CHUNK_SIZE {
+	//	end := i + MAX_CHUNK_SIZE
+	//	if end > len(text) {
+	//		end = len(text)
+	//	}
+	//	chunk := text[i:end]
+	//	totalTokens += getTokenNumCached(tokenEncoder, chunk)
+	//}
+	//return totalTokens
 }
 
 func getTokenNumCached(tokenEncoder *tiktoken.Tiktoken, text string) int {
