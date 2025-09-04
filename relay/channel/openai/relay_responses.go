@@ -81,7 +81,11 @@ func OaiResponsesStreamHandler(c *gin.Context, resp *http.Response, info *relayc
 				if streamResponse.Item != nil {
 					switch streamResponse.Item.Type {
 					case dto.BuildInCallWebSearchCall:
-						info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview].CallCount++
+						if tool, exists := info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolWebSearchPreview]; exists && tool != nil {
+							tool.CallCount++
+						} else {
+							common.LogError(c, "built-in tool not found: "+dto.BuildInToolWebSearchPreview)
+						}
 					}
 				}
 			}
