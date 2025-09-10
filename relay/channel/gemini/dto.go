@@ -144,10 +144,11 @@ type GeminiChatGenerationConfig struct {
 }
 
 type GeminiChatCandidate struct {
-	Content       GeminiChatContent        `json:"content"`
-	FinishReason  *string                  `json:"finishReason"`
-	Index         int64                    `json:"index"`
-	SafetyRatings []GeminiChatSafetyRating `json:"safetyRatings"`
+	Content           GeminiChatContent        `json:"content"`
+	FinishReason      *string                  `json:"finishReason"`
+	Index             int64                    `json:"index"`
+	SafetyRatings     []GeminiChatSafetyRating `json:"safetyRatings"`
+	GroundingMetadata any                      `json:"groundingMetadata"`
 }
 
 type GeminiChatSafetyRating struct {
