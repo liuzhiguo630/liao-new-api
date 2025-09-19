@@ -583,7 +583,18 @@ func testAllChannels(notify bool) error {
 
 			// disable channel
 			if isChannelEnabled && shouldBanChannel && channel.GetAutoBan() {
-				processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+				// 用于 liao 的兼容，获取 testModel 名称
+				testModel := ""
+				if channel.TestModel != nil && *channel.TestModel != "" {
+					testModel = *channel.TestModel
+				} else {
+					if len(channel.GetModels()) > 0 {
+						testModel = channel.GetModels()[0]
+					} else {
+						testModel = "gpt-4o-mini"
+					}
+				}
+				processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), testModel, newAPIError, false)
 			}
 
 			// enable channel

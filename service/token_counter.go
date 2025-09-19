@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -255,6 +256,102 @@ func getImageToken(fileMeta *types.FileMeta, model string, stream bool) (int, er
 	}
 
 	return tiles*tileTokens + baseTokens, nil
+}
+
+// liao 需要的适配，相比旧版有改动
+func CountTokenChatRequest(request dto.GeneralOpenAIRequest, model string) (int, error) {
+	tkm := 0
+	msgTokens, err := CountTokenMessages(request.Messages, model, request.Stream)
+	if err != nil {
+		return 0, err
+	}
+	tkm += msgTokens
+	if request.Tools != nil {
+		toolsData, _ := json.Marshal(request.Tools)
+		var openaiTools []dto.ToolCallRequest
+		err := json.Unmarshal(toolsData, &openaiTools)
+		if err != nil {
+			return 0, errors.New(fmt.Sprintf("count_tools_token_fail: %s", err.Error()))
+		}
+		countStr := ""
+		for _, tool := range openaiTools {
+			countStr = tool.Function.Name
+			if tool.Function.Description != "" {
+				countStr += tool.Function.Description
+			}
+			if tool.Function.Parameters != nil {
+				countStr += fmt.Sprintf("%v", tool.Function.Parameters)
+			}
+		}
+		toolTokens := CountTokenInput(countStr, model)
+		tkm += 8
+		tkm += toolTokens
+	}
+
+	return tkm, nil
+}
+
+// liao 需要的适配，相比旧版有改动
+func CountTokenMessages(messages []dto.Message, model string, stream bool) (int, error) {
+	//recover when panic
+	tokenEncoder := getTokenEncoder(model)
+	// Reference:
+	// https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
+	// https://github.com/pkoukk/tiktoken-go/issues/6
+	//
+	// Every message follows <|start|>{role/name}\n{content}<|end|>\n
+	var tokensPerMessage int
+	var tokensPerName int
+	if model == "gpt-3.5-turbo-0301" {
+		tokensPerMessage = 4
+		tokensPerName = -1 // If there's a name, the role is omitted
+	} else {
+		tokensPerMessage = 3
+		tokensPerName = 1
+	}
+	tokenNum := 0
+	messageLength := 0
+	start := time.Now().UnixMilli()
+	for _, message := range messages {
+		tokenNum += tokensPerMessage
+		tokenNum += getTokenNum(tokenEncoder, message.Role)
+		if message.Content != nil {
+			if message.IsStringContent() {
+				stringContent := message.StringContent()
+				messageLength += len(stringContent)
+				tokenNum += getTokenNum(tokenEncoder, stringContent)
+				if message.Name != nil {
+					tokenNum += tokensPerName
+					tokenNum += getTokenNum(tokenEncoder, *message.Name)
+				}
+			} else {
+				arrayContent := message.ParseContent()
+				for _, m := range arrayContent {
+					if m.Type == "image_url" {
+						imageUrl := m.ImageUrl.(dto.MessageImageUrl)
+						fileMeta := &types.FileMeta{
+							FileType:   types.FileTypeImage,
+							MimeType:   imageUrl.MimeType,
+							OriginData: imageUrl.Url,
+							Detail:     imageUrl.Detail,
+						}
+						imageTokenNum, err := getImageToken(fileMeta, model, stream)
+						if err != nil {
+							return 0, err
+						}
+						tokenNum += imageTokenNum
+						log.Printf("image token num: %d", imageTokenNum)
+					} else {
+						tokenNum += getTokenNum(tokenEncoder, m.Text)
+						messageLength += len(m.Text)
+					}
+				}
+			}
+		}
+	}
+	tokenNum += 3 // Every reply is primed with <|start|>assistant<|message|>
+	log.Printf("token encode elasped %vms, model: %v, tokenNum: %v, messageLength: %v \n", time.Now().UnixMilli()-start, model, tokenNum, messageLength)
+	return tokenNum, nil
 }
 
 func CountRequestToken(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) (int, error) {

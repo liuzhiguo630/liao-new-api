@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,49 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// liao 需要的适配，新增的接口
+func TokenCounterHelper(c *gin.Context) {
+	relayInfo := &relaycommon.RelayInfo{
+		RelayMode: relayconstant.RelayModeChatCompletions,
+	}
+	// get & validate textRequest 获取并验证文本请求
+	textRequest, err := helper.GetAndValidateTextRequest(c, relayInfo.RelayMode)
+	if err != nil {
+		logger.LogError(c, fmt.Sprintf("getAndValidateTextRequest failed: %s", err.Error()))
+		return
+	}
+
+	promptTokens, err := getPromptTokens(textRequest, relayInfo)
+	if err != nil {
+		logger.LogError(c, fmt.Sprintf("getPromptTokens failed: %s", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"prompt_tokens": promptTokens,
+	})
+
+}
+
+func getPromptTokens(textRequest *dto.GeneralOpenAIRequest, info *relaycommon.RelayInfo) (int, error) {
+	var promptTokens int
+	var err error
+	switch info.RelayMode {
+	case relayconstant.RelayModeChatCompletions:
+		promptTokens, err = service.CountTokenChatRequest(*textRequest, textRequest.Model)
+	case relayconstant.RelayModeCompletions:
+		promptTokens = service.CountTokenInput(textRequest.Prompt, textRequest.Model)
+	case relayconstant.RelayModeModerations:
+		promptTokens = service.CountTokenInput(textRequest.Input, textRequest.Model)
+	case relayconstant.RelayModeEmbeddings:
+		promptTokens = service.CountTokenInput(textRequest.Input, textRequest.Model)
+	default:
+		err = errors.New("unknown relay mode")
+		promptTokens = 0
+	}
+	info.PromptTokens = promptTokens
+	return promptTokens, err
+}
 
 func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
