@@ -89,6 +89,9 @@ func SetRelayRouter(router *gin.Engine) {
 			controller.Relay(c, types.RelayFormatOpenAI)
 		})
 
+		// liao 需要的适配，新增接口
+		httpRouter.POST("/chat/completions/calc-tokens", relay.TokenCounterHelper)
+
 		// response related routes
 		httpRouter.POST("/responses", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIResponses)
