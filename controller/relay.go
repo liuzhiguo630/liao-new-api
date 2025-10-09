@@ -189,7 +189,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if !shouldRetryBool {
 			// 打印错误请求内容
-			logger.LogError(c, fmt.Sprintf("relay bodyError (originalModel %s, status code: %d, url:%s): %s %s", originalModel, err.StatusCode, c.Request.URL.String(), err.Error(), string(requestBody)))
+			logger.LogError(c, fmt.Sprintf("relay bodyError (originalModel %s, url:%s): %s %s", originalModel, c.Request.URL.String(), newAPIError.Error(), string(requestBody)))
 			break
 		}
 	}
