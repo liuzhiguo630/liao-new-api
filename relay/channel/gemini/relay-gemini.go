@@ -620,6 +620,21 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 			},
 		}
 	}
+	if len(info.ParamOverride) > 0 {
+		if info.ParamOverride["minThink"] != nil {
+			budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
+			if budget != nil {
+				if geminiRequest.GenerationConfig.ThinkingConfig != nil {
+					geminiRequest.GenerationConfig.ThinkingConfig.ThinkingBudget = common.GetPointer(int(budget.(float64)))
+				} else {
+					geminiRequest.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
+						ThinkingBudget: common.GetPointer(int(budget.(float64))),
+					}
+				}
+			}
+		}
+		delete(info.ParamOverride, "minThink")
+	}
 
 	return &geminiRequest, nil
 }
