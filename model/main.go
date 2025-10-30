@@ -163,7 +163,8 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, error) {
 			common.LogSqlType = common.DatabaseTypeMySQL
 		}
 		return gorm.Open(mysql.Open(dsn), &gorm.Config{
-			PrepareStmt: true, // precompile SQL
+			PrepareStmt:            false, // precompile SQL
+			SkipDefaultTransaction: true,
 		})
 	}
 	// Use SQLite
@@ -222,11 +223,11 @@ func InitLogDB() (err error) {
 		}
 		LOG_DB = db
 		// If log DB is MySQL, also ensure Chinese-capable charset
-		if common.LogSqlType == common.DatabaseTypeMySQL {
-			if err := checkMySQLChineseSupport(LOG_DB); err != nil {
-				panic(err)
-			}
-		}
+		//if common.LogSqlType == common.DatabaseTypeMySQL {
+		//	if err := checkMySQLChineseSupport(LOG_DB); err != nil {
+		//		panic(err)
+		//	}
+		//}
 		sqlDB, err := LOG_DB.DB()
 		if err != nil {
 			return err
@@ -239,7 +240,7 @@ func InitLogDB() (err error) {
 			return nil
 		}
 		common.SysLog("database migration started")
-		err = migrateLOGDB()
+		//err = migrateLOGDB()
 		return err
 	} else {
 		common.FatalLog(err)
