@@ -156,6 +156,19 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 		// apply param override
 		if len(info.ParamOverride) > 0 {
+			if info.ParamOverride["minThink"] != nil {
+				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
+				if budget != nil {
+					if geminiReq.GenerationConfig.ThinkingConfig != nil {
+						geminiReq.GenerationConfig.ThinkingConfig.ThinkingBudget = common.GetPointer(int(budget.(float64)))
+					} else {
+						geminiReq.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
+							ThinkingBudget: common.GetPointer(int(budget.(float64))),
+						}
+					}
+				}
+			}
+			delete(info.ParamOverride, "minThink")
 			jsonData, err = relaycommon.ApplyParamOverride(jsonData, info.ParamOverride, relaycommon.BuildParamOverrideContext(info))
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeChannelParamOverrideInvalid, types.ErrOptionWithSkipRetry())
