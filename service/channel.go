@@ -57,7 +57,11 @@ func ShouldDisableChannel(channelType int, err *types.NewAPIError) bool {
 	if types.IsSkipRetryError(err) {
 		return false
 	}
+	oaiErr := err.ToOpenAIError()
 	if err.StatusCode == http.StatusUnauthorized {
+		if strings.Contains(fmt.Sprintf("%v", oaiErr.Code), "insufficient permissions for this operation") {
+			return false
+		}
 		return true
 	}
 	if err.StatusCode == http.StatusForbidden {
@@ -66,7 +70,6 @@ func ShouldDisableChannel(channelType int, err *types.NewAPIError) bool {
 			return true
 		}
 	}
-	oaiErr := err.ToOpenAIError()
 	switch oaiErr.Code {
 	case "invalid_api_key":
 		return true
