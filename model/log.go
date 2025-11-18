@@ -19,6 +19,7 @@ import (
 
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1"`
+	IdStr            string `json:"idStr" gorm:"-"`
 	UserId           int    `json:"user_id" gorm:"index"`
 	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
 	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
@@ -245,6 +246,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		if log.ChannelId != 0 {
 			channelIds.Add(log.ChannelId)
 		}
+		log.IdStr = fmt.Sprintf("%d", log.Id)
 	}
 
 	if channelIds.Len() > 0 {
