@@ -309,7 +309,8 @@ export const useLogsData = () => {
     let expandDatesLocal = {};
     for (let i = 0; i < logs.length; i++) {
       logs[i].timestamp2string = timestamp2string(logs[i].created_at);
-      logs[i].key = logs[i].id;
+      logs[i].key = logs[i].idStr;
+      console.log(logs[i].idStr);
       let other = getLogOther(logs[i].other);
       let expandDataLocal = [];
 
