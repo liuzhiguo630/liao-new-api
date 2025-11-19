@@ -2,6 +2,7 @@ package model_setting
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/QuantumNous/new-api/setting/config"
 )
@@ -32,6 +33,7 @@ var defaultClaudeSettings = ClaudeSettings{
 
 // 全局实例
 var claudeSettings = defaultClaudeSettings
+var claudeSettingsMutex sync.RWMutex
 
 func init() {
 	// 注册到全局配置管理器
@@ -40,6 +42,9 @@ func init() {
 
 // GetClaudeSettings 获取Claude配置
 func GetClaudeSettings() *ClaudeSettings {
+	claudeSettingsMutex.Lock()
+	defer claudeSettingsMutex.Unlock()
+
 	// check default max tokens must have default key
 	if _, ok := claudeSettings.DefaultMaxTokens["default"]; !ok {
 		claudeSettings.DefaultMaxTokens["default"] = 8192
@@ -48,6 +53,9 @@ func GetClaudeSettings() *ClaudeSettings {
 }
 
 func (c *ClaudeSettings) WriteHeaders(originModel string, httpHeader *http.Header) {
+	claudeSettingsMutex.RLock()
+	defer claudeSettingsMutex.RUnlock()
+
 	if headers, ok := c.HeadersSettings[originModel]; ok {
 		for headerKey, headerValues := range headers {
 			// get existing values for this header key
@@ -68,6 +76,9 @@ func (c *ClaudeSettings) WriteHeaders(originModel string, httpHeader *http.Heade
 }
 
 func (c *ClaudeSettings) GetDefaultMaxTokens(model string) int {
+	claudeSettingsMutex.RLock()
+	defer claudeSettingsMutex.RUnlock()
+
 	if maxTokens, ok := c.DefaultMaxTokens[model]; ok {
 		return maxTokens
 	}
