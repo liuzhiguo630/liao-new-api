@@ -270,6 +270,7 @@ type GeminiPart struct {
 	MediaResolution     json.RawMessage                `json:"mediaResolution,omitempty"`
 	VideoMetadata       json.RawMessage                `json:"videoMetadata,omitempty"`
 	FileData            *GeminiFileData                `json:"fileData,omitempty"`
+	VideoMetadata       any                            `json:"videoMetadata,omitempty"`
 	ExecutableCode      *GeminiPartExecutableCode      `json:"executableCode,omitempty"`
 	CodeExecutionResult *GeminiPartCodeExecutionResult `json:"codeExecutionResult,omitempty"`
 }
