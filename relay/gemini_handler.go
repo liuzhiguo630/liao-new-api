@@ -145,6 +145,21 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		requestBody = bytes.NewReader(body)
 	} else {
 		// 使用 ConvertGeminiRequest 转换请求格式
+		if len(info.ParamOverride) > 0 {
+			if info.ParamOverride["minThink"] != nil {
+				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
+				if budget != nil {
+					if request.GenerationConfig.ThinkingConfig != nil {
+						request.GenerationConfig.ThinkingConfig.ThinkingBudget = common.GetPointer(int(budget.(float64)))
+					} else {
+						request.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
+							ThinkingBudget: common.GetPointer(int(budget.(float64))),
+						}
+					}
+				}
+			}
+			delete(info.ParamOverride, "minThink")
+		}
 		convertedRequest, err := adaptor.ConvertGeminiRequest(c, info, request)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -156,19 +171,6 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 
 		// apply param override
 		if len(info.ParamOverride) > 0 {
-			if info.ParamOverride["minThink"] != nil {
-				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
-				if budget != nil {
-					if geminiReq.GenerationConfig.ThinkingConfig != nil {
-						geminiReq.GenerationConfig.ThinkingConfig.ThinkingBudget = common.GetPointer(int(budget.(float64)))
-					} else {
-						geminiReq.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
-							ThinkingBudget: common.GetPointer(int(budget.(float64))),
-						}
-					}
-				}
-			}
-			delete(info.ParamOverride, "minThink")
 			jsonData, err = relaycommon.ApplyParamOverride(jsonData, info.ParamOverride, relaycommon.BuildParamOverrideContext(info))
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeChannelParamOverrideInvalid, types.ErrOptionWithSkipRetry())
