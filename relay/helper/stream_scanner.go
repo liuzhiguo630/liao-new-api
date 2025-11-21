@@ -54,6 +54,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		scanner    = bufio.NewScanner(resp.Body)
 		ticker     = time.NewTicker(streamingTimeout)
 		pingTicker *time.Ticker
+		isFinished bool
 		writeMutex sync.Mutex     // Mutex to protect concurrent writes
 		wg         sync.WaitGroup // 用于等待所有 goroutine 退出
 	)
@@ -80,6 +81,11 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 	// 改进资源清理，确保所有 goroutine 正确退出
 	defer func() {
+		// 标记处理结束，防止后续写入
+		writeMutex.Lock()
+		isFinished = true
+		writeMutex.Unlock()
+
 		// 通知所有 goroutine 停止
 		common.SafeSendBool(stopChan, true)
 
@@ -141,7 +147,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 					go func() {
 						writeMutex.Lock()
 						defer writeMutex.Unlock()
-						if ctx.Err() != nil {
+						if isFinished {
 							return
 						}
 						done <- PingData(c)
@@ -228,7 +234,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				go func() {
 					writeMutex.Lock()
 					defer writeMutex.Unlock()
-					if ctx.Err() != nil {
+					if isFinished {
 						return
 					}
 					done <- dataHandler(data)
