@@ -148,7 +148,7 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		if len(info.ParamOverride) > 0 {
 			if info.ParamOverride["minThink"] != nil {
 				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
-				if budget != nil {
+				if budget != nil && info.IsStream {
 					if request.GenerationConfig.ThinkingConfig == nil {
 						request.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
 							ThinkingBudget: common.GetPointer(int(budget.(float64))),
