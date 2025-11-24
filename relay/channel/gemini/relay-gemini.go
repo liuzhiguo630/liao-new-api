@@ -397,7 +397,7 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 					},
 				}
 				if shouldAttachThoughtSignature && !signatureAttached && hasFunctionCallContent(toolCall.FunctionCall) && len(toolCall.ThoughtSignature) == 0 {
-					toolCall.ThoughtSignature = json.RawMessage(strconv.Quote(thoughtSignatureBypassValue))
+					toolCall.ThoughtSignature = strconv.Quote(thoughtSignatureBypassValue)
 					signatureAttached = true
 				}
 				parts = append(parts, toolCall)
@@ -413,7 +413,8 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 					continue
 				}
 				parts = append(parts, dto.GeminiPart{
-					Text: part.Text,
+					Text:             part.Text,
+					ThoughtSignature: part.ThoughtSignature,
 				})
 			} else if part.Type == dto.ContentTypeImageURL {
 				imageNum += 1
@@ -440,6 +441,7 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 							MimeType: fileData.MimeType, // 使用原始的 MimeType，因为大小写可能对API有意义
 							Data:     fileData.Base64Data,
 						},
+						ThoughtSignature: part.ThoughtSignature,
 					})
 				} else {
 					format, base64String, err := service.DecodeBase64FileData(part.GetImageMedia().Url)
@@ -451,6 +453,7 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 							MimeType: format,
 							Data:     base64String,
 						},
+						ThoughtSignature: part.ThoughtSignature,
 					})
 				}
 			} else if part.Type == dto.ContentTypeFile {
@@ -466,6 +469,7 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 						MimeType: format,
 						Data:     base64String,
 					},
+					ThoughtSignature: part.ThoughtSignature,
 				})
 			} else if part.Type == dto.ContentTypeInputAudio {
 				if part.GetInputAudio().Data == "" {
@@ -480,6 +484,7 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 						MimeType: "audio/" + part.GetInputAudio().Format,
 						Data:     base64String,
 					},
+					ThoughtSignature: part.ThoughtSignature,
 				})
 			}
 		}
@@ -827,6 +832,9 @@ func responseGeminiChat2OpenAI(c *gin.Context, response *dto.GeminiChatResponse)
 						// 其他媒体类型，直接显示链接
 						texts = append(texts, fmt.Sprintf("[media](data:%s;base64,%s)", part.InlineData.MimeType, part.InlineData.Data))
 					}
+					if part.ThoughtSignature != "" {
+						choice.Message.ThoughtSignature = part.ThoughtSignature
+					}
 				} else if part.FunctionCall != nil {
 					choice.FinishReason = constant.FinishReasonToolCalls
 					if call := getResponseToolCall(&part); call != nil {
@@ -834,6 +842,9 @@ func responseGeminiChat2OpenAI(c *gin.Context, response *dto.GeminiChatResponse)
 					}
 				} else if part.Thought {
 					choice.Message.ReasoningContent = part.Text
+					if part.ThoughtSignature != "" {
+						choice.Message.ThoughtSignature = part.ThoughtSignature
+					}
 				} else {
 					if part.ExecutableCode != nil {
 						texts = append(texts, "```"+part.ExecutableCode.Language+"\n"+part.ExecutableCode.Code+"\n```")
