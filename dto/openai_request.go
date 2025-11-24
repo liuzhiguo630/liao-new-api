@@ -302,6 +302,7 @@ type Message struct {
 	Name             *string         `json:"name,omitempty"`
 	Prefix           *bool           `json:"prefix,omitempty"`
 	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ThoughtSignature string          `json:"thought_signature,omitempty"`
 	Reasoning        string          `json:"reasoning,omitempty"`
 	ToolCalls        json.RawMessage `json:"tool_calls,omitempty"`
 	ToolCallId       string          `json:"tool_call_id,omitempty"`
@@ -317,7 +318,8 @@ type MediaContent struct {
 	File       any    `json:"file,omitempty"`
 	VideoUrl   any    `json:"video_url,omitempty"`
 	// OpenRouter Params
-	CacheControl json.RawMessage `json:"cache_control,omitempty"`
+	CacheControl     json.RawMessage `json:"cache_control,omitempty"`
+	ThoughtSignature string          `json:"thoughtSignature,omitempty"`
 }
 
 func (m *MediaContent) GetImageMedia() *MessageImageUrl {
@@ -505,8 +507,9 @@ func (m *Message) ParseContent() []MediaContent {
 	content, ok := m.Content.(string)
 	if ok {
 		contentList = []MediaContent{{
-			Type: ContentTypeText,
-			Text: content,
+			Type:             ContentTypeText,
+			Text:             content,
+			ThoughtSignature: m.ThoughtSignature,
 		}}
 		m.parsedContent = contentList
 		return contentList
@@ -540,8 +543,9 @@ func (m *Message) ParseContent() []MediaContent {
 		case ContentTypeText:
 			if text, ok := contentItem["text"].(string); ok {
 				contentList = append(contentList, MediaContent{
-					Type: ContentTypeText,
-					Text: text,
+					Type:             ContentTypeText,
+					Text:             text,
+					ThoughtSignature: m.ThoughtSignature,
 				})
 			}
 
@@ -564,8 +568,9 @@ func (m *Message) ParseContent() []MediaContent {
 				}
 			}
 			contentList = append(contentList, MediaContent{
-				Type:     ContentTypeImageURL,
-				ImageUrl: temp,
+				Type:             ContentTypeImageURL,
+				ImageUrl:         temp,
+				ThoughtSignature: m.ThoughtSignature,
 			})
 
 		case ContentTypeInputAudio:
@@ -578,8 +583,9 @@ func (m *Message) ParseContent() []MediaContent {
 						Format: format,
 					}
 					contentList = append(contentList, MediaContent{
-						Type:       ContentTypeInputAudio,
-						InputAudio: temp,
+						Type:             ContentTypeInputAudio,
+						InputAudio:       temp,
+						ThoughtSignature: m.ThoughtSignature,
 					})
 				}
 			}
@@ -592,6 +598,7 @@ func (m *Message) ParseContent() []MediaContent {
 						File: &MessageFile{
 							FileId: fileId,
 						},
+						ThoughtSignature: m.ThoughtSignature,
 					})
 				} else {
 					fileName, ok1 := fileData["filename"].(string)
@@ -603,6 +610,7 @@ func (m *Message) ParseContent() []MediaContent {
 								FileName: fileName,
 								FileData: fileDataStr,
 							},
+							ThoughtSignature: m.ThoughtSignature,
 						})
 					}
 				}
@@ -614,6 +622,7 @@ func (m *Message) ParseContent() []MediaContent {
 					VideoUrl: &MessageVideoUrl{
 						Url: videoUrl,
 					},
+					ThoughtSignature: m.ThoughtSignature,
 				})
 			}
 		}
