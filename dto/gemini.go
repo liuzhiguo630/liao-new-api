@@ -264,7 +264,7 @@ type GeminiPart struct {
 	Thought          bool                    `json:"thought,omitempty"`
 	InlineData       *GeminiInlineData       `json:"inlineData,omitempty"`
 	FunctionCall     *FunctionCall           `json:"functionCall,omitempty"`
-	ThoughtSignature string                  `json:"thoughtSignature,omitempty"`
+	ThoughtSignature json.RawMessage         `json:"thoughtSignature,omitempty"`
 	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
 	// Optional. Media resolution for the input media.
 	MediaResolution     json.RawMessage                `json:"mediaResolution,omitempty"`
