@@ -192,10 +192,12 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}(),
 		Other: otherStr,
 	}
-	err := LOG_DB.Create(log).Error
-	if err != nil {
-		logger.LogError(c, "failed to record log: "+err.Error())
-	}
+	go func() {
+		err := LOG_DB.Create(log).Error
+		if err != nil {
+			logger.LogError(c, "failed to record log: "+err.Error())
+		}
+	}()
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
