@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	InitialScannerBufferSize = 64 << 10 // 64KB (64*1024)
-	MaxScannerBufferSize     = 10 << 20 // 10MB (10*1024*1024)
+	InitialScannerBufferSize = 64 << 10  // 64KB (64*1024)
+	MaxScannerBufferSize     = 100 << 20 // 10MB (10*1024*1024)
 	DefaultPingInterval      = 10 * time.Second
 )
 
