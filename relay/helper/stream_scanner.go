@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	InitialScannerBufferSize    = 64 << 10 // 64KB (64*1024)
-	DefaultMaxScannerBufferSize = 64 << 20 // 64MB (64*1024*1024) default SSE buffer size
+	InitialScannerBufferSize    = 64 << 10  // 64KB (64*1024)
+	DefaultMaxScannerBufferSize = 100 << 20 // 100MB — liao: 升级到 100M 以支持大图等场景
 	DefaultPingInterval         = 10 * time.Second
 )
 
