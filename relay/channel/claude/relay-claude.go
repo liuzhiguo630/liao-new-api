@@ -595,7 +595,8 @@ func FormatClaudeResponseInfo(requestMode int, claudeResponse *dto.ClaudeRespons
 			claudeInfo.Model = claudeResponse.Message.Model
 
 			// message_start, 获取usage
-			claudeInfo.Usage.PromptTokens = claudeResponse.Message.Usage.InputTokens
+			// PromptTokens 应该是总输入 tokens，包含缓存命中的 tokens
+			claudeInfo.Usage.PromptTokens = claudeResponse.Message.Usage.InputTokens + claudeResponse.Message.Usage.CacheReadInputTokens
 			claudeInfo.Usage.PromptTokensDetails.CachedTokens = claudeResponse.Message.Usage.CacheReadInputTokens
 			claudeInfo.Usage.PromptTokensDetails.CachedCreationTokens = claudeResponse.Message.Usage.CacheCreationInputTokens
 			claudeInfo.Usage.ClaudeCacheCreation5mTokens = claudeResponse.Message.Usage.GetCacheCreation5mTokens()
@@ -610,9 +611,10 @@ func FormatClaudeResponseInfo(requestMode int, claudeResponse *dto.ClaudeRespons
 			}
 		} else if claudeResponse.Type == "message_delta" {
 			// 最终的usage获取
-			if claudeResponse.Usage.InputTokens > 0 {
+			if claudeResponse.Usage.InputTokens > 0 || claudeResponse.Usage.CacheReadInputTokens > 0 {
 				// 不叠加，只取最新的
-				claudeInfo.Usage.PromptTokens = claudeResponse.Usage.InputTokens
+				// PromptTokens 应该是总输入 tokens，包含缓存命中的 tokens
+				claudeInfo.Usage.PromptTokens = claudeResponse.Usage.InputTokens + claudeResponse.Usage.CacheReadInputTokens
 			}
 			claudeInfo.Usage.CompletionTokens = claudeResponse.Usage.OutputTokens
 			claudeInfo.Usage.TotalTokens = claudeInfo.Usage.PromptTokens + claudeInfo.Usage.CompletionTokens
@@ -739,9 +741,10 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		claudeInfo.Usage.CompletionTokens = completionTokens
 		claudeInfo.Usage.TotalTokens = info.PromptTokens + completionTokens
 	} else {
-		claudeInfo.Usage.PromptTokens = claudeResponse.Usage.InputTokens
+		// PromptTokens 应该是总输入 tokens，包含缓存命中的 tokens
+		claudeInfo.Usage.PromptTokens = claudeResponse.Usage.InputTokens + claudeResponse.Usage.CacheReadInputTokens
 		claudeInfo.Usage.CompletionTokens = claudeResponse.Usage.OutputTokens
-		claudeInfo.Usage.TotalTokens = claudeResponse.Usage.InputTokens + claudeResponse.Usage.OutputTokens
+		claudeInfo.Usage.TotalTokens = claudeInfo.Usage.PromptTokens + claudeInfo.Usage.CompletionTokens
 		claudeInfo.Usage.PromptTokensDetails.CachedTokens = claudeResponse.Usage.CacheReadInputTokens
 		claudeInfo.Usage.PromptTokensDetails.CachedCreationTokens = claudeResponse.Usage.CacheCreationInputTokens
 		claudeInfo.Usage.ClaudeCacheCreation5mTokens = claudeResponse.Usage.GetCacheCreation5mTokens()
