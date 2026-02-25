@@ -332,6 +332,19 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
+// sanitizeLogLikePattern 根据日志数据库类型，选择合适的 LIKE 模式处理方式。
+// ClickHouse 不支持 LIKE ... ESCAPE 语法，需单独处理。
+func sanitizeLogLikePattern(input string) (pattern string, cond string, err error) {
+	if common.LogSqlType == common.DatabaseTypeClickHouse {
+		pattern, err = sanitizeLikePatternNoEscape(input)
+		cond = "LIKE ?"
+	} else {
+		pattern, err = sanitizeLikePattern(input)
+		cond = "LIKE ? ESCAPE '!'"
+	}
+	return
+}
+
 func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
@@ -341,11 +354,11 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
+		modelNamePattern, likeOp, err := sanitizeLogLikePattern(modelName)
 		if err != nil {
 			return nil, 0, err
 		}
-		tx = tx.Where("logs.model_name LIKE ? ESCAPE '!'", modelNamePattern)
+		tx = tx.Where("logs.model_name "+likeOp, modelNamePattern)
 	}
 	if tokenName != "" {
 		tx = tx.Where("logs.token_name = ?", tokenName)
@@ -404,12 +417,12 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where("created_at <= ?", endTimestamp)
 	}
 	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
+		modelNamePattern, likeOp, err := sanitizeLogLikePattern(modelName)
 		if err != nil {
 			return stat, err
 		}
-		tx = tx.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
-		rpmTpmQuery = rpmTpmQuery.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
+		tx = tx.Where("model_name "+likeOp, modelNamePattern)
+		rpmTpmQuery = rpmTpmQuery.Where("model_name "+likeOp, modelNamePattern)
 	}
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)

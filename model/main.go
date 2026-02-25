@@ -222,6 +222,12 @@ func InitLogDB() (err error) {
 			db = db.Debug()
 		}
 		LOG_DB = db
+		// Allow explicitly specifying the log DB type via LOG_DB_TYPE env var.
+		// Must be set AFTER chooseDB, which overwrites LogSqlType based on DSN format.
+		// ClickHouse uses the MySQL wire protocol so its DSN looks like a MySQL DSN.
+		if strings.ToLower(os.Getenv("LOG_DB_TYPE")) == common.DatabaseTypeClickHouse {
+			common.LogSqlType = common.DatabaseTypeClickHouse
+		}
 		// If log DB is MySQL, also ensure Chinese-capable charset
 		//if common.LogSqlType == common.DatabaseTypeMySQL {
 		//	if err := checkMySQLChineseSupport(LOG_DB); err != nil {
