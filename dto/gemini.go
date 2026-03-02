@@ -325,8 +325,8 @@ type GeminiChatTool struct {
 
 type GeminiChatGenerationConfig struct {
 	Temperature                *float64              `json:"temperature,omitempty"`
-	TopP                       float64               `json:"topP,omitempty"`
-	TopK                       float64               `json:"topK,omitempty"`
+	TopP                       *float64              `json:"topP,omitempty"`
+	TopK                       *float64              `json:"topK,omitempty"`
 	MaxOutputTokens            uint                  `json:"maxOutputTokens,omitempty"`
 	CandidateCount             int                   `json:"candidateCount,omitempty"`
 	StopSequences              []string              `json:"stopSequences,omitempty"`
@@ -339,7 +339,7 @@ type GeminiChatGenerationConfig struct {
 	Logprobs                   *int32                `json:"logprobs,omitempty"`
 	EnableEnhancedCivicAnswers *bool                 `json:"enableEnhancedCivicAnswers,omitempty"`
 	MediaResolution            MediaResolution       `json:"mediaResolution,omitempty"`
-	Seed                       int64                 `json:"seed,omitempty"`
+	Seed                       *int64                `json:"seed,omitempty"`
 	ResponseModalities         []string              `json:"responseModalities,omitempty"`
 	ThinkingConfig             *GeminiThinkingConfig `json:"thinkingConfig,omitempty"`
 	SpeechConfig               json.RawMessage       `json:"speechConfig,omitempty"` // RawMessage to allow flexible speech config
@@ -351,8 +351,8 @@ func (c *GeminiChatGenerationConfig) UnmarshalJSON(data []byte) error {
 	type Alias GeminiChatGenerationConfig
 	var aux struct {
 		Alias
-		TopPSnake                       float64               `json:"top_p,omitempty"`
-		TopKSnake                       float64               `json:"top_k,omitempty"`
+		TopPSnake                       *float64              `json:"top_p,omitempty"`
+		TopKSnake                       *float64              `json:"top_k,omitempty"`
 		MaxOutputTokensSnake            uint                  `json:"max_output_tokens,omitempty"`
 		CandidateCountSnake             int                   `json:"candidate_count,omitempty"`
 		StopSequencesSnake              []string              `json:"stop_sequences,omitempty"`
@@ -377,10 +377,10 @@ func (c *GeminiChatGenerationConfig) UnmarshalJSON(data []byte) error {
 	*c = GeminiChatGenerationConfig(aux.Alias)
 
 	// Prioritize snake_case if present
-	if aux.TopPSnake != 0 {
+	if aux.TopPSnake != nil {
 		c.TopP = aux.TopPSnake
 	}
-	if aux.TopKSnake != 0 {
+	if aux.TopKSnake != nil {
 		c.TopK = aux.TopKSnake
 	}
 	if aux.MaxOutputTokensSnake != 0 {

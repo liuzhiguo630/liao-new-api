@@ -698,11 +698,11 @@ func GeminiToOpenAIRequest(geminiRequest *dto.GeminiChatRequest, info *relaycomm
 	if geminiRequest.GenerationConfig.Temperature != nil {
 		openaiRequest.Temperature = geminiRequest.GenerationConfig.Temperature
 	}
-	if geminiRequest.GenerationConfig.TopP > 0 {
-		openaiRequest.TopP = geminiRequest.GenerationConfig.TopP
+	if geminiRequest.GenerationConfig.TopP != nil && *geminiRequest.GenerationConfig.TopP > 0 {
+		openaiRequest.TopP = *geminiRequest.GenerationConfig.TopP
 	}
-	if geminiRequest.GenerationConfig.TopK > 0 {
-		openaiRequest.TopK = int(geminiRequest.GenerationConfig.TopK)
+	if geminiRequest.GenerationConfig.TopK != nil && *geminiRequest.GenerationConfig.TopK > 0 {
+		openaiRequest.TopK = int(*geminiRequest.GenerationConfig.TopK)
 	}
 	if geminiRequest.GenerationConfig.MaxOutputTokens > 0 {
 		openaiRequest.MaxTokens = geminiRequest.GenerationConfig.MaxOutputTokens

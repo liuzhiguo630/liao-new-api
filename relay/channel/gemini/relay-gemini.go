@@ -201,10 +201,15 @@ func CovertOpenAI2Gemini(c *gin.Context, textRequest dto.GeneralOpenAIRequest, i
 		Contents: make([]dto.GeminiChatContent, 0, len(textRequest.Messages)),
 		GenerationConfig: dto.GeminiChatGenerationConfig{
 			Temperature:     textRequest.Temperature,
-			TopP:            textRequest.TopP,
 			MaxOutputTokens: textRequest.GetMaxTokens(),
-			Seed:            int64(textRequest.Seed),
 		},
+	}
+
+	if textRequest.TopP != 0 {
+		geminiRequest.GenerationConfig.TopP = common.GetPointer(textRequest.TopP)
+	}
+	if textRequest.Seed != 0 {
+		geminiRequest.GenerationConfig.Seed = common.GetPointer(int64(textRequest.Seed))
 	}
 
 	attachThoughtSignature := (info.ChannelType == constant.ChannelTypeGemini ||
