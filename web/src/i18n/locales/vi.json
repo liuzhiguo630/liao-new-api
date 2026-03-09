@@ -1068,6 +1068,7 @@
     "成功": "Thành công",
     "成功兑换额度：": "Số tiền đổi thành công:",
     "成功时自动启用通道": "Bật kênh khi thành công",
+    "Gemini 429限流时自动静默": "Tự động tắt tiếng Gemini khi bị giới hạn 429",
     "我已了解禁用两步验证将永久删除所有相关设置和备用码，此操作不可撤销": "Tôi đã hiểu rằng việc vô hiệu hóa xác thực hai yếu tố sẽ xóa vĩnh viễn tất cả các cài đặt liên quan và mã dự phòng, thao tác này không thể hoàn tác",
     "我已阅读并同意": "Tôi đã đọc và đồng ý với",
     "或": "hoặc",

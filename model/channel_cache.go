@@ -18,6 +18,13 @@ var group2model2channels map[string]map[string][]int // enabled channel
 var channelsIDM map[int]*Channel                     // all channels include disabled
 var channelSyncLock sync.RWMutex
 
+// ChannelModelMuteChecker is set by the service package to check if a channel+model is muted.
+// This avoids circular dependency between model and service packages.
+var ChannelModelMuteChecker func(channelId int, modelName string) bool
+
+// ErrAllChannelsMuted is returned when all candidate channels for a model are muted due to rate limiting.
+var ErrAllChannelsMuted = errors.New("all channels are rate-limited (muted)")
+
 func InitChannelCache() {
 	if !common.MemoryCacheEnabled {
 		return
@@ -117,13 +124,31 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 
 	if len(channels) == 1 {
 		if channel, ok := channelsIDM[channels[0]]; ok {
+			if ChannelModelMuteChecker != nil && ChannelModelMuteChecker(channels[0], model) {
+				return nil, ErrAllChannelsMuted
+			}
 			return channel, nil
 		}
 		return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channels[0])
 	}
 
+	// Filter out muted channels; return ErrAllChannelsMuted if every channel is muted
+	filteredChannels := channels
+	if ChannelModelMuteChecker != nil {
+		var unmuted []int
+		for _, chId := range channels {
+			if !ChannelModelMuteChecker(chId, model) {
+				unmuted = append(unmuted, chId)
+			}
+		}
+		if len(unmuted) == 0 {
+			return nil, ErrAllChannelsMuted
+		}
+		filteredChannels = unmuted
+	}
+
 	uniquePriorities := make(map[int]bool)
-	for _, channelId := range channels {
+	for _, channelId := range filteredChannels {
 		if channel, ok := channelsIDM[channelId]; ok {
 			uniquePriorities[int(channel.GetPriority())] = true
 		} else {
@@ -144,7 +169,7 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	// get the priority for the given retry number
 	var sumWeight = 0
 	var targetChannels []*Channel
-	for _, channelId := range channels {
+	for _, channelId := range filteredChannels {
 		if channel, ok := channelsIDM[channelId]; ok {
 			if channel.GetPriority() == targetPriority {
 				sumWeight += channel.GetWeight()

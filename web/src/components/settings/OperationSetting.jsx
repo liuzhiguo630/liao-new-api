@@ -69,6 +69,7 @@ const OperationSetting = () => {
     QuotaRemindThreshold: 0,
     AutomaticDisableChannelEnabled: false,
     AutomaticEnableChannelEnabled: false,
+    GeminiRateLimitMuteEnabled: false,
     AutomaticDisableKeywords: '',
     AutomaticDisableStatusCodes: '401',
     AutomaticRetryStatusCodes:

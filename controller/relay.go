@@ -298,6 +298,9 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
 
 	if err != nil {
+		if errors.Is(err, model.ErrAllChannelsMuted) {
+			return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeGetChannelFailed, http.StatusTooManyRequests, types.ErrOptionWithSkipRetry())
+		}
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
@@ -348,6 +351,18 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		gopool.Go(func() {
 			service.DisableChannel(channelError, err.ErrorWithStatusCode())
 		})
+	}
+
+	// Mute channel+model on 429 to avoid hammering upstream (Gemini official API only)
+	if err.StatusCode == http.StatusTooManyRequests {
+		baseURL := common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl)
+		if baseURL == "" {
+			modelName := c.GetString("original_model")
+			if modelName != "" {
+				duration := service.GetMuteDurationFor429(err.Error())
+				service.MuteChannelModel(channelError.ChannelId, channelError.ChannelType, modelName, duration)
+			}
+		}
 	}
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {

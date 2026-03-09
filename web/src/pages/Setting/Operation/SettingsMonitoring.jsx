@@ -38,6 +38,7 @@ export default function SettingsMonitoring(props) {
     QuotaRemindThreshold: '',
     AutomaticDisableChannelEnabled: false,
     AutomaticEnableChannelEnabled: false,
+    GeminiRateLimitMuteEnabled: false,
     AutomaticDisableKeywords: '',
     AutomaticDisableStatusCodes: '401',
     AutomaticRetryStatusCodes:
@@ -230,6 +231,21 @@ export default function SettingsMonitoring(props) {
                     setInputs({
                       ...inputs,
                       AutomaticEnableChannelEnabled: value,
+                    })
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'GeminiRateLimitMuteEnabled'}
+                  label={t('Gemini 429限流时自动静默')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      GeminiRateLimitMuteEnabled: value,
                     })
                   }
                 />

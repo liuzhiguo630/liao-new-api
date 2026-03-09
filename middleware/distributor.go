@@ -130,6 +130,10 @@ func Distribute() func(c *gin.Context) {
 						Retry:      common.GetPointer(0),
 					})
 					if err != nil {
+						if errors.Is(err, model.ErrAllChannelsMuted) {
+							abortWithOpenAiMessage(c, http.StatusTooManyRequests, i18n.T(c, i18n.MsgDistributorAllChannelsMuted, map[string]any{"Model": modelRequest.Model}))
+							return
+						}
 						showGroup := usingGroup
 						if usingGroup == "auto" {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)

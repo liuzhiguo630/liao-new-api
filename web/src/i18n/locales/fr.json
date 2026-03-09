@@ -1082,6 +1082,7 @@
     "成功": "Succès",
     "成功兑换额度：": "Montant de l'échange réussi :",
     "成功时自动启用通道": "Activer le canal en cas de succès",
+    "Gemini 429限流时自动静默": "Mettre Gemini en sourdine automatiquement lors d'une limite 429",
     "我已了解禁用两步验证将永久删除所有相关设置和备用码，此操作不可撤销": "J'ai compris que la désactivation de l'authentification à deux facteurs supprimera définitivement tous les paramètres et codes de sauvegarde associés, cette opération ne peut pas être annulée",
     "我已阅读并同意": "J'ai lu et j'accepte",
     "或": "Ou",

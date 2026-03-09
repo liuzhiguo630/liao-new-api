@@ -1071,6 +1071,7 @@
     "成功": "Success",
     "成功兑换额度：": "Successful redemption amount:",
     "成功时自动启用通道": "Enable channel when successful",
+    "Gemini 429限流时自动静默": "Auto-mute Gemini channels on 429 rate limit",
     "我已了解禁用两步验证将永久删除所有相关设置和备用码，此操作不可撤销": "I have understood that disabling two-factor authentication will permanently delete all related settings and backup codes, this operation cannot be undone",
     "我已阅读并同意": "I have read and agree to",
     "或": "or",
