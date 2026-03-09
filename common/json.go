@@ -5,23 +5,23 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/bytedance/sonic"
+	gojson "github.com/goccy/go-json"
 )
 
 func Unmarshal(data []byte, v any) error {
-	return sonic.Unmarshal(data, v)
+	return gojson.Unmarshal(data, v)
 }
 
 func UnmarshalJsonStr(data string, v any) error {
-	return sonic.UnmarshalString(data, v)
+	return gojson.Unmarshal([]byte(data), v)
 }
 
 func DecodeJson(reader io.Reader, v any) error {
-	return sonic.ConfigDefault.NewDecoder(reader).Decode(v)
+	return gojson.NewDecoder(reader).Decode(v)
 }
 
 func Marshal(v any) ([]byte, error) {
-	return sonic.Marshal(v)
+	return gojson.Marshal(v)
 }
 
 func GetJsonType(data json.RawMessage) string {
