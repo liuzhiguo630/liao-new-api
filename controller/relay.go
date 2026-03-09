@@ -356,7 +356,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	// Mute channel+model on 429 to avoid hammering upstream (Gemini official API only)
 	if err.StatusCode == http.StatusTooManyRequests {
 		baseURL := common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl)
-		if baseURL == "" {
+		if baseURL == "https://generativelanguage.googleapis.com" {
 			modelName := c.GetString("original_model")
 			if modelName != "" {
 				duration := service.GetMuteDurationFor429(err.Error())

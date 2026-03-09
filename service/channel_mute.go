@@ -1,7 +1,6 @@
 package service
 
 import (
-	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -16,8 +15,6 @@ const defaultMuteDuration = 3 * time.Second
 // channelModelMuteMap stores mute expiration time for channel+model combinations.
 // Key: "channelId:modelName", Value: time.Time (mute expiry)
 var channelModelMuteMap sync.Map
-
-var retryInRegex = regexp.MustCompile(`(?i)retry\s+in\s+(\d+(?:\.\d+)?)\s*s`)
 
 func init() {
 	model.ChannelModelMuteChecker = IsChannelModelMuted
@@ -63,27 +60,8 @@ func IsChannelModelMuted(channelId int, modelName string) bool {
 	return true
 }
 
-// ParseRetryDuration parses a retry duration from an error message.
-// It looks for patterns like "retry in 10.459224242s" or "retry in 5s".
-// Returns 0 if no retry duration is found.
-func ParseRetryDuration(errMsg string) time.Duration {
-	matches := retryInRegex.FindStringSubmatch(errMsg)
-	if len(matches) < 2 {
-		return 0
-	}
-	seconds, err := strconv.ParseFloat(matches[1], 64)
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds * float64(time.Second))
-}
-
 // GetMuteDurationFor429 returns the mute duration for a 429 error.
 // If the error message contains a specific retry duration, use it; otherwise use the default.
 func GetMuteDurationFor429(errMsg string) time.Duration {
-	d := ParseRetryDuration(errMsg)
-	if d > 0 {
-		return d
-	}
 	return defaultMuteDuration
 }
