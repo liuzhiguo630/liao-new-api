@@ -225,8 +225,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), originalModel, newAPIError, shouldRetryBool)
 
 		if !shouldRetryBool {
-			// 打印错误请求内容
-			logger.LogError(c, fmt.Sprintf("relay bodyError (originalModel %s, url:%s): %s %s", originalModel, c.Request.URL.String(), newAPIError.Error(), string(requestBody)))
+			logger.LogError(c, fmt.Sprintf("relay bodyError (originalModel %s, url:%s): %s", originalModel, c.Request.URL.String(), newAPIError.Error()))
 			break
 		}
 	}

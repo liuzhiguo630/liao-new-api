@@ -235,10 +235,10 @@ func CountTokenMessages(c *gin.Context, messages []dto.Message, model string, st
 					if m.Type == "image_url" {
 						imageUrl := m.ImageUrl.(dto.MessageImageUrl)
 						fileMeta := &types.FileMeta{
-							FileType:   types.FileTypeImage,
-							MimeType:   imageUrl.MimeType,
-							OriginData: imageUrl.Url,
-							Detail:     imageUrl.Detail,
+							FileType: types.FileTypeImage,
+							MimeType: imageUrl.MimeType,
+							Source:   types.NewURLFileSource(imageUrl.Url),
+							Detail:   imageUrl.Detail,
 						}
 						imageTokenNum, err := getImageToken(c, fileMeta, model, stream)
 						if err != nil {

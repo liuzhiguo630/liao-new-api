@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"io"
 	"net/http"
 	"strings"
@@ -41,7 +40,7 @@ func TokenCounterHelper(c *gin.Context) {
 		return
 	}
 
-	promptTokens, err := getPromptTokens(textRequest, relayInfo)
+	promptTokens, err := getPromptTokens(c, textRequest, relayInfo)
 	if err != nil {
 		logger.LogError(c, fmt.Sprintf("getPromptTokens failed: %s", err.Error()))
 		return
@@ -52,12 +51,12 @@ func TokenCounterHelper(c *gin.Context) {
 
 }
 
-func getPromptTokens(textRequest *dto.GeneralOpenAIRequest, info *relaycommon.RelayInfo) (int, error) {
+func getPromptTokens(c *gin.Context, textRequest *dto.GeneralOpenAIRequest, info *relaycommon.RelayInfo) (int, error) {
 	var promptTokens int
 	var err error
 	switch info.RelayMode {
 	case relayconstant.RelayModeChatCompletions:
-		promptTokens, err = service.CountTokenChatRequest(*textRequest, textRequest.Model)
+		promptTokens, err = service.CountTokenChatRequest(c, *textRequest, textRequest.Model)
 	case relayconstant.RelayModeCompletions:
 		promptTokens = service.CountTokenInput(textRequest.Prompt, textRequest.Model)
 	case relayconstant.RelayModeModerations:
@@ -68,7 +67,7 @@ func getPromptTokens(textRequest *dto.GeneralOpenAIRequest, info *relaycommon.Re
 		err = errors.New("unknown relay mode")
 		promptTokens = 0
 	}
-	info.PromptTokens = promptTokens
+	info.SetEstimatePromptTokens(promptTokens)
 	return promptTokens, err
 }
 
