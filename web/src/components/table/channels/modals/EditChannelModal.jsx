@@ -178,6 +178,7 @@ const EditChannelModal = (props) => {
     allow_include_obfuscation: false,
     allow_inference_geo: false,
     claude_beta_query: false,
+    filter_bedrock_beta: false,
   };
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
@@ -673,6 +674,7 @@ const EditChannelModal = (props) => {
           data.allow_inference_geo =
             parsedSettings.allow_inference_geo || false;
           data.claude_beta_query = parsedSettings.claude_beta_query || false;
+          data.filter_bedrock_beta = parsedSettings.filter_bedrock_beta || false;
         } catch (error) {
           console.error('解析其他设置失败:', error);
           data.azure_responses_version = '';
@@ -686,6 +688,7 @@ const EditChannelModal = (props) => {
           data.allow_include_obfuscation = false;
           data.allow_inference_geo = false;
           data.claude_beta_query = false;
+          data.filter_bedrock_beta = false;
         }
       } else {
         // 兼容历史数据：老渠道没有 settings 时，默认按 json 展示
@@ -698,6 +701,7 @@ const EditChannelModal = (props) => {
         data.allow_include_obfuscation = false;
         data.allow_inference_geo = false;
         data.claude_beta_query = false;
+        data.filter_bedrock_beta = false;
       }
 
       if (
@@ -1496,6 +1500,7 @@ const EditChannelModal = (props) => {
       if (localInputs.type === 14) {
         settings.allow_inference_geo = localInputs.allow_inference_geo === true;
         settings.claude_beta_query = localInputs.claude_beta_query === true;
+        settings.filter_bedrock_beta = localInputs.filter_bedrock_beta === true;
       }
     }
 
@@ -1520,6 +1525,7 @@ const EditChannelModal = (props) => {
     delete localInputs.allow_include_obfuscation;
     delete localInputs.allow_inference_geo;
     delete localInputs.claude_beta_query;
+    delete localInputs.filter_bedrock_beta;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -3466,21 +3472,38 @@ const EditChannelModal = (props) => {
                     </div>
 
                     {inputs.type === 14 && (
-                      <Form.Switch
-                        field='claude_beta_query'
-                        label={t('Claude 强制 beta=true')}
-                        checkedText={t('开')}
-                        uncheckedText={t('关')}
-                        onChange={(value) =>
-                          handleChannelOtherSettingsChange(
-                            'claude_beta_query',
-                            value,
-                          )
-                        }
-                        extraText={t(
-                          '开启后，该渠道请求 Claude 时将强制追加 ?beta=true（无需客户端手动传参）',
-                        )}
-                      />
+                      <>
+                        <Form.Switch
+                          field='claude_beta_query'
+                          label={t('Claude 强制 beta=true')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'claude_beta_query',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            '开启后，该渠道请求 Claude 时将强制追加 ?beta=true（无需客户端手动传参）',
+                          )}
+                        />
+                        <Form.Switch
+                          field='filter_bedrock_beta'
+                          label={t('过滤 Bedrock 不支持的 Beta')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelOtherSettingsChange(
+                              'filter_bedrock_beta',
+                              value,
+                            )
+                          }
+                          extraText={t(
+                            '开启后，自动过滤 AWS Bedrock 不支持的 anthropic-beta flag，避免与 Claude Max 混用时报错',
+                          )}
+                        />
+                      </>
                     )}
 
                     {inputs.type === 1 && (
