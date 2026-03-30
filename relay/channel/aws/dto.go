@@ -29,6 +29,19 @@ type AwsClaudeRequest struct {
 	OutputConfig     json.RawMessage     `json:"output_config,omitempty"`
 }
 
+var bedrockSupportedBeta = map[string]bool{
+	"computer-use-2025-01-24":          true,
+	"token-efficient-tools-2025-02-19": true,
+	"interleaved-thinking-2025-05-14":  true,
+	"output-128k-2025-02-19":           true,
+	"dev-full-thinking-2025-05-14":     true,
+	"context-1m-2025-08-07":            true,
+	"context-management-2025-06-27":    true,
+	"effort-2025-11-24":                true,
+	"tool-search-tool-2025-10-19":      true,
+	"tool-examples-2025-10-29":         true,
+}
+
 func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
 	var awsClaudeRequest AwsClaudeRequest
 	err := common.DecodeJson(requestBody, &awsClaudeRequest)
@@ -37,13 +50,18 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
 
-	// check header anthropic-beta
 	anthropicBetaValues := requestHeader.Get("anthropic-beta")
 	if len(anthropicBetaValues) > 0 {
-		var tempArray []string
-		tempArray = strings.Split(anthropicBetaValues, ",")
-		if len(tempArray) > 0 {
-			betaJson, err := json.Marshal(tempArray)
+		rawFlags := strings.Split(anthropicBetaValues, ",")
+		var filtered []string
+		for _, flag := range rawFlags {
+			flag = strings.TrimSpace(flag)
+			if flag != "" && bedrockSupportedBeta[flag] {
+				filtered = append(filtered, flag)
+			}
+		}
+		if len(filtered) > 0 {
+			betaJson, err := json.Marshal(filtered)
 			if err != nil {
 				return nil, err
 			}
