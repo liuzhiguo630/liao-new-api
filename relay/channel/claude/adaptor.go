@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -14,6 +15,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+var BedrockSupportedBeta = map[string]bool{
+	"computer-use-2025-01-24":          true,
+	"token-efficient-tools-2025-02-19": true,
+	"interleaved-thinking-2025-05-14":  true,
+	"output-128k-2025-02-19":           true,
+	"dev-full-thinking-2025-05-14":     true,
+	"context-1m-2025-08-07":            true,
+	"context-management-2025-06-27":    true,
+	"effort-2025-11-24":                true,
+	"tool-search-tool-2025-10-19":      true,
+	"tool-examples-2025-10-29":         true,
+}
 
 type Adaptor struct {
 }
@@ -49,12 +63,28 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 }
 
 func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) {
-	// common headers operation
 	anthropicBeta := c.Request.Header.Get("anthropic-beta")
 	if anthropicBeta != "" {
-		req.Set("anthropic-beta", anthropicBeta)
+		if info.ChannelOtherSettings.FilterBedrockBeta {
+			anthropicBeta = filterBedrockBetaFlags(anthropicBeta)
+		}
+		if anthropicBeta != "" {
+			req.Set("anthropic-beta", anthropicBeta)
+		}
 	}
 	model_setting.GetClaudeSettings().WriteHeaders(info.OriginModelName, req)
+}
+
+func filterBedrockBetaFlags(raw string) string {
+	flags := strings.Split(raw, ",")
+	var kept []string
+	for _, f := range flags {
+		f = strings.TrimSpace(f)
+		if f != "" && BedrockSupportedBeta[f] {
+			kept = append(kept, f)
+		}
+	}
+	return strings.Join(kept, ",")
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
