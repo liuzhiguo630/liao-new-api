@@ -33,7 +33,8 @@ type ChannelOtherSettings struct {
 	DisableStore            bool          `json:"disable_store,omitempty"`             // 是否禁用 store 透传（默认允许透传，禁用后可能导致 Codex 无法使用）
 	AllowSafetyIdentifier   bool          `json:"allow_safety_identifier,omitempty"`   // 是否允许 safety_identifier 透传（默认过滤以保护用户隐私）
 	AllowIncludeObfuscation bool          `json:"allow_include_obfuscation,omitempty"` // 是否允许 stream_options.include_obfuscation 透传（默认过滤以避免关闭流混淆保护）
-	AwsKeyType              AwsKeyType    `json:"aws_key_type,omitempty"`
+	AwsKeyType         AwsKeyType `json:"aws_key_type,omitempty"`
+	FilterBedrockBeta  bool       `json:"filter_bedrock_beta,omitempty"` // 过滤 Bedrock 不支持的 anthropic-beta flag
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
