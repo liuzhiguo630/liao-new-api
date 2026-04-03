@@ -12,68 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestSanitizeBedrockPromptCachingScope(t *testing.T) {
-	payload := map[string]interface{}{
-		"cache_control": map[string]interface{}{
-			"type":  "ephemeral",
-			"scope": "workspace",
-		},
-		"metadata": map[string]interface{}{
-			"scope": "keep-me",
-		},
-		"system": []interface{}{
-			map[string]interface{}{
-				"type": "text",
-				"text": "system text",
-			},
-			map[string]interface{}{
-				"type": "text",
-				"text": "cached system text",
-				"cache_control": map[string]interface{}{
-					"type":  "ephemeral",
-					"scope": "conversation",
-				},
-			},
-		},
-		"messages": []interface{}{
-			map[string]interface{}{
-				"role": "user",
-				"content": []interface{}{
-					map[string]interface{}{
-						"type": "text",
-						"text": "hello",
-						"cache_control": map[string]interface{}{
-							"type":  "ephemeral",
-							"scope": "message",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	sanitizeBedrockPromptCachingScope(payload)
-
-	topLevelCache := payload["cache_control"].(map[string]interface{})
-	if _, ok := topLevelCache["scope"]; ok {
-		t.Fatalf("expected top-level cache_control.scope to be removed")
-	}
-
-	systemCache := payload["system"].([]interface{})[1].(map[string]interface{})["cache_control"].(map[string]interface{})
-	if _, ok := systemCache["scope"]; ok {
-		t.Fatalf("expected system cache_control.scope to be removed")
-	}
-
-	messageCache := payload["messages"].([]interface{})[0].(map[string]interface{})["content"].([]interface{})[0].(map[string]interface{})["cache_control"].(map[string]interface{})
-	if _, ok := messageCache["scope"]; ok {
-		t.Fatalf("expected message cache_control.scope to be removed")
-	}
-
-	if payload["metadata"].(map[string]interface{})["scope"] != "keep-me" {
-		t.Fatalf("expected non-cache_control scope field to be preserved")
-	}
-}
-
 func TestFormatRequestRemovesUnsupportedCacheControlScopeWhenFilterEnabled(t *testing.T) {
 	requestBody := `{
 		"model": "claude-opus-4-6",

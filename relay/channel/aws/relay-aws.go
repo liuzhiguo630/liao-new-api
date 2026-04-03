@@ -178,7 +178,7 @@ func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeR
 			return nil, errors.Wrap(err, "pass-through unmarshal request body fail")
 		}
 		if info.ChannelOtherSettings.FilterBedrockBeta {
-			sanitizeBedrockPromptCachingScope(data)
+		claude.SanitizeBedrockPromptCachingScope(data)
 		}
 		delete(data, "model")
 		delete(data, "stream")
@@ -191,7 +191,7 @@ func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeR
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal aws request fail")
 	}
-	sanitizedBody, err := sanitizeBedrockPromptCachingBytes(body)
+	sanitizedBody, err := claude.SanitizeBedrockPromptCachingBytes(body)
 	if err != nil {
 		return nil, errors.Wrap(err, "sanitize aws request fail")
 	}
