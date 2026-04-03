@@ -37,7 +37,7 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header, filterBedro
 	}
 	body := rawBody
 	if filterBedrockBeta {
-		body, err = sanitizeBedrockPromptCachingBytes(rawBody)
+		body, err = claude.SanitizeBedrockPromptCachingBytes(rawBody)
 		if err != nil {
 			return nil, err
 		}
@@ -68,36 +68,6 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header, filterBedro
 	}
 	logger.LogJson(context.Background(), "json", awsClaudeRequest)
 	return &awsClaudeRequest, nil
-}
-
-func sanitizeBedrockPromptCachingBytes(rawBody []byte) ([]byte, error) {
-	var payload any
-	if err := common.Unmarshal(rawBody, &payload); err != nil {
-		return nil, err
-	}
-	sanitizeBedrockPromptCachingScope(payload)
-	return common.Marshal(payload)
-}
-
-func sanitizeBedrockPromptCachingScope(payload any) {
-	sanitizeBedrockPromptCachingValue(payload, false)
-}
-
-func sanitizeBedrockPromptCachingValue(value interface{}, insideCacheControl bool) {
-	switch v := value.(type) {
-	case map[string]interface{}:
-		if insideCacheControl {
-			delete(v, "scope")
-		}
-		for key, child := range v {
-			sanitizeBedrockPromptCachingValue(child, insideCacheControl || key == "cache_control")
-		}
-	case []interface{}:
-		for _, child := range v {
-			sanitizeBedrockPromptCachingValue(child, insideCacheControl)
-		}
-	default:
-	}
 }
 
 // NovaMessage Nova模型使用messages-v1格式
