@@ -337,6 +337,12 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if code >= 200 && code < 300 {
 		return false
 	}
+	// Bedrock may return 400 for channel/account-level invoke failures
+	// such as model access denial. Those failures should fall through to
+	// the next channel instead of terminating the whole retry chain.
+	if code == http.StatusBadRequest && openaiErr.GetErrorCode() == types.ErrorCodeAwsInvokeError {
+		return true
+	}
 	if code < 100 || code > 599 {
 		return true
 	}

@@ -177,6 +177,7 @@ func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeR
 		if err := common.Unmarshal(body, &data); err != nil {
 			return nil, errors.Wrap(err, "pass-through unmarshal request body fail")
 		}
+		sanitizeBedrockPromptCachingScope(data)
 		delete(data, "model")
 		delete(data, "stream")
 		return common.Marshal(data)
