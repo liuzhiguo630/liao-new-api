@@ -31,9 +31,21 @@ type AwsClaudeRequest struct {
 }
 
 func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
-	var awsClaudeRequest AwsClaudeRequest
-	err := common.DecodeJson(requestBody, &awsClaudeRequest)
+	rawBody, err := io.ReadAll(requestBody)
 	if err != nil {
+		return nil, err
+	}
+	var bodyMap map[string]interface{}
+	if err := common.Unmarshal(rawBody, &bodyMap); err != nil {
+		return nil, err
+	}
+	sanitizeBedrockPromptCachingScope(bodyMap)
+	sanitizedBody, err := common.Marshal(bodyMap)
+	if err != nil {
+		return nil, err
+	}
+	var awsClaudeRequest AwsClaudeRequest
+	if err := common.Unmarshal(sanitizedBody, &awsClaudeRequest); err != nil {
 		return nil, err
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
@@ -58,6 +70,27 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 	}
 	logger.LogJson(context.Background(), "json", awsClaudeRequest)
 	return &awsClaudeRequest, nil
+}
+
+func sanitizeBedrockPromptCachingScope(payload map[string]interface{}) {
+	sanitizeBedrockPromptCachingValue(payload, false)
+}
+
+func sanitizeBedrockPromptCachingValue(value interface{}, insideCacheControl bool) {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		if insideCacheControl {
+			delete(v, "scope")
+		}
+		for key, child := range v {
+			sanitizeBedrockPromptCachingValue(child, insideCacheControl || key == "cache_control")
+		}
+	case []interface{}:
+		for _, child := range v {
+			sanitizeBedrockPromptCachingValue(child, insideCacheControl)
+		}
+	default:
+	}
 }
 
 // NovaMessage Nova模型使用messages-v1格式
