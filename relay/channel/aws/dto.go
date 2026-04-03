@@ -30,22 +30,20 @@ type AwsClaudeRequest struct {
 	OutputConfig     json.RawMessage     `json:"output_config,omitempty"`
 }
 
-func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
+func formatRequest(requestBody io.Reader, requestHeader http.Header, filterBedrockBeta bool) (*AwsClaudeRequest, error) {
 	rawBody, err := io.ReadAll(requestBody)
 	if err != nil {
 		return nil, err
 	}
-	var bodyMap map[string]interface{}
-	if err := common.Unmarshal(rawBody, &bodyMap); err != nil {
-		return nil, err
-	}
-	sanitizeBedrockPromptCachingScope(bodyMap)
-	sanitizedBody, err := common.Marshal(bodyMap)
-	if err != nil {
-		return nil, err
+	body := rawBody
+	if filterBedrockBeta {
+		body, err = sanitizeBedrockPromptCachingBytes(rawBody)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var awsClaudeRequest AwsClaudeRequest
-	if err := common.Unmarshal(sanitizedBody, &awsClaudeRequest); err != nil {
+	if err := common.Unmarshal(body, &awsClaudeRequest); err != nil {
 		return nil, err
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
@@ -72,7 +70,16 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 	return &awsClaudeRequest, nil
 }
 
-func sanitizeBedrockPromptCachingScope(payload map[string]interface{}) {
+func sanitizeBedrockPromptCachingBytes(rawBody []byte) ([]byte, error) {
+	var payload any
+	if err := common.Unmarshal(rawBody, &payload); err != nil {
+		return nil, err
+	}
+	sanitizeBedrockPromptCachingScope(payload)
+	return common.Marshal(payload)
+}
+
+func sanitizeBedrockPromptCachingScope(payload any) {
 	sanitizeBedrockPromptCachingValue(payload, false)
 }
 

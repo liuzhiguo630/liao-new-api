@@ -129,7 +129,7 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 		a.AwsReq = awsReq
 		return nil, nil
 	} else {
-		awsClaudeReq, err := formatRequest(requestBody, requestHeader)
+		awsClaudeReq, err := formatRequest(requestBody, requestHeader, info.ChannelOtherSettings.FilterBedrockBeta)
 		if err != nil {
 			return nil, types.NewError(errors.Wrap(err, "format aws request fail"), types.ErrorCodeBadRequestBody)
 		}
@@ -177,12 +177,25 @@ func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeR
 		if err := common.Unmarshal(body, &data); err != nil {
 			return nil, errors.Wrap(err, "pass-through unmarshal request body fail")
 		}
-		sanitizeBedrockPromptCachingScope(data)
+		if info.ChannelOtherSettings.FilterBedrockBeta {
+			sanitizeBedrockPromptCachingScope(data)
+		}
 		delete(data, "model")
 		delete(data, "stream")
 		return common.Marshal(data)
 	}
-	return common.Marshal(awsClaudeReq)
+	if !info.ChannelOtherSettings.FilterBedrockBeta {
+		return common.Marshal(awsClaudeReq)
+	}
+	body, err := common.Marshal(awsClaudeReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshal aws request fail")
+	}
+	sanitizedBody, err := sanitizeBedrockPromptCachingBytes(body)
+	if err != nil {
+		return nil, errors.Wrap(err, "sanitize aws request fail")
+	}
+	return sanitizedBody, nil
 }
 
 func getAwsRegionPrefix(awsRegionId string) string {
