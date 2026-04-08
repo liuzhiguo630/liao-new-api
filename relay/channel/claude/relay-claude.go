@@ -337,15 +337,17 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 					claudeMediaMessage := dto.ClaudeMediaMessage{
 						Type: mediaMessage.Type,
 					}
-					if mediaMessage.Type == "text" {
+					if mediaMessage.Type == dto.ContentTypeText {
 						claudeMediaMessage.Text = common.GetPointer[string](mediaMessage.Text)
-					} else {
+					} else if mediaMessage.Type == dto.ContentTypeImageURL {
 						imageUrl := mediaMessage.GetImageMedia()
+						if imageUrl == nil || imageUrl.Url == "" {
+							continue
+						}
 						claudeMediaMessage.Type = "image"
 						claudeMediaMessage.Source = &dto.ClaudeMessageSource{
 							Type: "base64",
 						}
-						// 使用统一的文件服务获取图片数据
 						var source *types.FileSource
 						if strings.HasPrefix(imageUrl.Url, "http") {
 							source = types.NewURLFileSource(imageUrl.Url)
@@ -354,10 +356,45 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 						}
 						base64Data, mimeType, err := service.GetBase64Data(c, source, "formatting image for Claude")
 						if err != nil {
-							return nil, fmt.Errorf("get file data failed: %s", err.Error())
+							return nil, fmt.Errorf("get image data failed: %s", err.Error())
 						}
 						claudeMediaMessage.Source.MediaType = mimeType
 						claudeMediaMessage.Source.Data = base64Data
+					} else if mediaMessage.Type == dto.ContentTypeFile {
+						file := mediaMessage.GetFile()
+						if file == nil {
+							continue
+						}
+						claudeMediaMessage.Type = "document"
+						if file.FileData != "" {
+							var source *types.FileSource
+							if strings.HasPrefix(file.FileData, "http") {
+								claudeMediaMessage.Source = &dto.ClaudeMessageSource{
+									Type: "url",
+									Url:  file.FileData,
+								}
+							} else {
+								source = types.NewBase64FileSource(file.FileData, "")
+								base64Data, mimeType, err := service.GetBase64Data(c, source, "formatting file for Claude")
+								if err != nil {
+									return nil, fmt.Errorf("get file data failed: %s", err.Error())
+								}
+								claudeMediaMessage.Source = &dto.ClaudeMessageSource{
+									Type:      "base64",
+									MediaType: mimeType,
+									Data:      base64Data,
+								}
+							}
+						} else if file.FileId != "" {
+							claudeMediaMessage.Source = &dto.ClaudeMessageSource{
+								Type: "file",
+								Data: file.FileId,
+							}
+						} else {
+							continue
+						}
+					} else {
+						continue
 					}
 					claudeMediaMessages = append(claudeMediaMessages, claudeMediaMessage)
 				}
