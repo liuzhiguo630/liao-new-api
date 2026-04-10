@@ -141,34 +141,22 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 			for {
 				select {
-				case <-pingTicker.C:
-					// 使用超时机制防止写操作阻塞
-					done := make(chan error, 1)
-					gopool.Go(func() {
-						writeMutex.Lock()
-						defer writeMutex.Unlock()
-						if isFinished {
-							return
-						}
-						done <- PingData(c)
-					})
-
-					select {
-					case err := <-done:
-						if err != nil {
-							logger.LogError(c, "ping data error: "+err.Error())
-							return
-						}
-						if common.DebugEnabled {
-							println("ping data sent")
-						}
-					case <-time.After(10 * time.Second):
-						logger.LogError(c, "ping data send timeout")
+			case <-pingTicker.C:
+					if !writeMutex.TryLock() {
+						continue
+					}
+					if isFinished {
+						writeMutex.Unlock()
 						return
-					case <-ctx.Done():
+					}
+					err := PingData(c)
+					writeMutex.Unlock()
+					if err != nil {
+						logger.LogError(c, "ping data error: "+err.Error())
 						return
-					case <-stopChan:
-						return
+					}
+					if common.DebugEnabled {
+						println("ping data sent")
 					}
 				case <-ctx.Done():
 					return

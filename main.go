@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -40,8 +42,53 @@ var buildFS embed.FS
 //go:embed web/dist/index.html
 var indexPage []byte
 
+func initGCTuning() {
+	// GOGC: lower value = more frequent GC. Default 100 means GC at 2x live heap.
+	// Setting to 50 triggers GC at 1.5x live heap, trading ~10% CPU for ~33% lower peak memory.
+	gogc := 50
+	if v := os.Getenv("GOGC"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			gogc = n
+		}
+	}
+	old := debug.SetGCPercent(gogc)
+	common.SysLog(fmt.Sprintf("GC tuning: GOGC %d -> %d", old, gogc))
+
+	// GOMEMLIMIT: soft memory limit for the Go runtime.
+	// Prevents heap from growing unbounded when GOGC alone isn't enough.
+	if v := os.Getenv("GOMEMLIMIT"); v != "" {
+		// Already handled by the runtime via env var, just log it.
+		common.SysLog(fmt.Sprintf("GC tuning: GOMEMLIMIT=%s (set via env)", v))
+	} else {
+		// Default: 8 GiB soft limit. Adjust via GOMEMLIMIT env var.
+		limit := int64(8) << 30
+		if limitMB := os.Getenv("GOMEMLIMIT_MB"); limitMB != "" {
+			if n, err := strconv.ParseInt(limitMB, 10, 64); err == nil && n > 0 {
+				limit = n << 20
+			}
+		}
+		debug.SetMemoryLimit(limit)
+		common.SysLog(fmt.Sprintf("GC tuning: GOMEMLIMIT set to %d MiB", limit>>20))
+	}
+
+	// Log current GC stats periodically for observability
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			common.SysLog(fmt.Sprintf("GC stats: NumGC=%d, HeapAlloc=%dMiB, HeapSys=%dMiB, StackSys=%dMiB, Goroutines=%d",
+				ms.NumGC, ms.HeapAlloc>>20, ms.HeapSys>>20, ms.StackSys>>20, runtime.NumGoroutine()))
+		}
+	}()
+}
+
 func main() {
 	startTime := time.Now()
+
+	// Tune GC before anything else to cap memory from the start
+	initGCTuning()
 
 	err := InitResources()
 	if err != nil {

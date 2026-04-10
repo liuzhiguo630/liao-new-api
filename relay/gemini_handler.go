@@ -120,10 +120,9 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	request := geminiReq
 	var err error
 	if !reuseOriginalBody {
-		request, err = common.DeepCopy(geminiReq)
-		if err != nil {
-			return types.NewError(fmt.Errorf("failed to copy request to GeminiChatRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
-		}
+		// Lightweight copy: shares Contents/InlineData (read-only in relay)
+		// to avoid duplicating large base64 payloads (~42% heap reduction per pprof).
+		request = geminiReq.ShallowCopyForRelay()
 	}
 
 	// model mapped 模型映射
