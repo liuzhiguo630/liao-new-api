@@ -42,6 +42,27 @@ var buildFS embed.FS
 //go:embed web/dist/index.html
 var indexPage []byte
 
+// detectContainerMemoryLimit reads the container memory limit from cgroup.
+// Returns 0 if not running in a container or limit is not set.
+func detectContainerMemoryLimit() int64 {
+	// cgroup v2
+	if data, err := os.ReadFile("/sys/fs/cgroup/memory.max"); err == nil {
+		s := strings.TrimSpace(string(data))
+		if s != "max" {
+			if n, err := strconv.ParseInt(s, 10, 64); err == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	// cgroup v1
+	if data, err := os.ReadFile("/sys/fs/cgroup/memory/memory.limit_in_bytes"); err == nil {
+		if n, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64); err == nil && n > 0 && n < 1<<62 {
+			return n
+		}
+	}
+	return 0
+}
+
 func initGCTuning() {
 	// GOGC: lower value = more frequent GC. Default 100 means GC at 2x live heap.
 	// Setting to 50 triggers GC at 1.5x live heap, trading ~10% CPU for ~33% lower peak memory.
@@ -55,20 +76,16 @@ func initGCTuning() {
 	common.SysLog(fmt.Sprintf("GC tuning: GOGC %d -> %d", old, gogc))
 
 	// GOMEMLIMIT: soft memory limit for the Go runtime.
-	// Prevents heap from growing unbounded when GOGC alone isn't enough.
+	// Auto-detect container memory limit from cgroup, set to 70%.
 	if v := os.Getenv("GOMEMLIMIT"); v != "" {
-		// Already handled by the runtime via env var, just log it.
 		common.SysLog(fmt.Sprintf("GC tuning: GOMEMLIMIT=%s (set via env)", v))
-	} else {
-		// Default: 8 GiB soft limit. Adjust via GOMEMLIMIT env var.
-		limit := int64(8) << 30
-		if limitMB := os.Getenv("GOMEMLIMIT_MB"); limitMB != "" {
-			if n, err := strconv.ParseInt(limitMB, 10, 64); err == nil && n > 0 {
-				limit = n << 20
-			}
-		}
+	} else if containerLimit := detectContainerMemoryLimit(); containerLimit > 0 {
+		limit := int64(float64(containerLimit) * 0.7)
 		debug.SetMemoryLimit(limit)
-		common.SysLog(fmt.Sprintf("GC tuning: GOMEMLIMIT set to %d MiB", limit>>20))
+		common.SysLog(fmt.Sprintf("GC tuning: GOMEMLIMIT set to %d MiB (70%% of container limit %d MiB)",
+			limit>>20, containerLimit>>20))
+	} else {
+		common.SysLog("GC tuning: GOMEMLIMIT not set (no container memory limit detected)")
 	}
 
 	// Log current GC stats periodically for observability
