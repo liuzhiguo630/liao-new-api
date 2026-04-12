@@ -162,13 +162,41 @@ func TestSanitizeBedrockRequestBody_RemovesUnsupportedFields(t *testing.T) {
 		t.Fatalf("SanitizeBedrockRequestBody error: %v", err)
 	}
 	s := string(sanitized)
-	for _, field := range []string{"model", "stream", "mcp_servers", "metadata", "service_tier", "inference_geo", "context_management", "output_format", "container"} {
+	// Universal fields should be removed
+	for _, field := range []string{"mcp_servers", "context_management", "output_format", "container"} {
 		if strings.Contains(s, `"`+field+`"`) {
 			t.Errorf("expected %s to be removed, got %s", field, s)
 		}
 	}
-	if !strings.Contains(s, "anthropic_version") {
-		t.Fatalf("expected anthropic_version to be preserved, got %s", s)
+	// model, stream, metadata, service_tier, inference_geo must be PRESERVED
+	// (proxied Bedrock channels need them; only AWS SDK path strips them via extra args)
+	for _, field := range []string{"model", "stream", "metadata", "service_tier", "inference_geo"} {
+		if !strings.Contains(s, `"`+field+`"`) {
+			t.Errorf("expected %s to be preserved for proxy path, got %s", field, s)
+		}
+	}
+}
+
+func TestSanitizeBedrockRequestBody_ExtraFields(t *testing.T) {
+	body := `{
+		"model": "claude-sonnet-4-20250514",
+		"stream": true,
+		"messages": [{"role": "user", "content": "hi"}],
+		"metadata": {"user_id": "test"},
+		"service_tier": "auto",
+		"inference_geo": "us"
+	}`
+
+	sanitized, err := SanitizeBedrockRequestBody([]byte(body),
+		"model", "stream", "metadata", "service_tier", "inference_geo")
+	if err != nil {
+		t.Fatalf("SanitizeBedrockRequestBody error: %v", err)
+	}
+	s := string(sanitized)
+	for _, field := range []string{"model", "stream", "metadata", "service_tier", "inference_geo"} {
+		if strings.Contains(s, `"`+field+`"`) {
+			t.Errorf("expected %s to be removed via extra args, got %s", field, s)
+		}
 	}
 	if !strings.Contains(s, "messages") {
 		t.Fatalf("expected messages to be preserved, got %s", s)

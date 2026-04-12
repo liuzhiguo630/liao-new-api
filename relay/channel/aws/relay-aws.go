@@ -183,7 +183,8 @@ func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeR
 			return nil, errors.Wrap(err, "marshal aws request fail")
 		}
 	}
-	return claude.SanitizeBedrockRequestBody(body)
+	return claude.SanitizeBedrockRequestBody(body,
+		"model", "stream", "metadata", "service_tier", "inference_geo")
 }
 
 func getAwsRegionPrefix(awsRegionId string) string {
