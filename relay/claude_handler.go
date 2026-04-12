@@ -139,7 +139,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		if info.ChannelOtherSettings.FilterBedrockBeta {
-			body, err = channelclaude.SanitizeBedrockPromptCachingBytes(body)
+			body, err = channelclaude.SanitizeBedrockRequestBody(body)
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
@@ -170,7 +170,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			}
 		}
 		if info.ChannelOtherSettings.FilterBedrockBeta {
-			jsonData, err = channelclaude.SanitizeBedrockPromptCachingBytes(jsonData)
+			jsonData, err = channelclaude.SanitizeBedrockRequestBody(jsonData)
 			if err != nil {
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
