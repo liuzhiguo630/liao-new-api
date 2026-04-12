@@ -163,39 +163,27 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 }
 
 // buildAwsRequestBody prepares the payload for AWS requests, applying passthrough rules when enabled.
+// All paths go through SanitizeBedrockRequestBody to strip fields Bedrock does not accept
+// (thinking.budget_tokens when disabled, unsupported top-level fields, cache_control.scope).
 func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeReq any) ([]byte, error) {
+	var body []byte
+	var err error
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return nil, errors.Wrap(err, "get request body for pass-through fail")
 		}
-		body, err := storage.Bytes()
+		body, err = storage.Bytes()
 		if err != nil {
 			return nil, errors.Wrap(err, "get request body bytes fail")
 		}
-		var data map[string]interface{}
-		if err := common.Unmarshal(body, &data); err != nil {
-			return nil, errors.Wrap(err, "pass-through unmarshal request body fail")
+	} else {
+		body, err = common.Marshal(awsClaudeReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "marshal aws request fail")
 		}
-		if info.ChannelOtherSettings.FilterBedrockBeta {
-		claude.SanitizeBedrockPromptCachingScope(data)
-		}
-		delete(data, "model")
-		delete(data, "stream")
-		return common.Marshal(data)
 	}
-	if !info.ChannelOtherSettings.FilterBedrockBeta {
-		return common.Marshal(awsClaudeReq)
-	}
-	body, err := common.Marshal(awsClaudeReq)
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal aws request fail")
-	}
-	sanitizedBody, err := claude.SanitizeBedrockPromptCachingBytes(body)
-	if err != nil {
-		return nil, errors.Wrap(err, "sanitize aws request fail")
-	}
-	return sanitizedBody, nil
+	return claude.SanitizeBedrockRequestBody(body)
 }
 
 func getAwsRegionPrefix(awsRegionId string) string {

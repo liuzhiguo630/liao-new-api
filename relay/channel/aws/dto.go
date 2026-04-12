@@ -48,6 +48,11 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header, filterBedro
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
 
+	// Bedrock rejects budget_tokens when thinking.type != "enabled"
+	if awsClaudeRequest.Thinking != nil && awsClaudeRequest.Thinking.Type != "enabled" {
+		awsClaudeRequest.Thinking.BudgetTokens = nil
+	}
+
 	anthropicBetaValues := requestHeader.Get("anthropic-beta")
 	if len(anthropicBetaValues) > 0 {
 		rawFlags := strings.Split(anthropicBetaValues, ",")
