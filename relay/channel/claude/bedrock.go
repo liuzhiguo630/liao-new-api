@@ -32,11 +32,14 @@ func sanitizeBedrockPromptCachingValue(value interface{}, insideCacheControl boo
 	}
 }
 
-// bedrockUnsupportedTopLevelFields lists Claude API fields that Bedrock does not accept.
+// bedrockUnsupportedTopLevelFields are Claude-only fields that Bedrock never accepts.
+// These are safe to strip for both direct AWS SDK calls and proxied Bedrock channels.
+// NOTE: model, stream, metadata, service_tier, inference_geo are NOT here because
+// proxied channels (type=14 with filter_bedrock_beta) still need them.
 var bedrockUnsupportedTopLevelFields = []string{
-	"model", "stream", "prompt", "max_tokens_to_sample",
-	"inference_geo", "context_management", "output_format",
-	"container", "mcp_servers", "metadata", "service_tier",
+	"prompt", "max_tokens_to_sample",
+	"context_management", "output_format",
+	"container", "mcp_servers",
 }
 
 // SanitizeBedrockRequestBody removes/fixes fields in the request body that are
@@ -44,13 +47,17 @@ var bedrockUnsupportedTopLevelFields = []string{
 //   - Removes budget_tokens from thinking when type != "enabled" (Bedrock rejects extra fields)
 //   - Removes top-level fields that Bedrock does not support
 //   - Removes cache_control.scope (delegates to SanitizeBedrockPromptCachingScope)
-func SanitizeBedrockRequestBody(rawBody []byte) ([]byte, error) {
+//   - extraFieldsToRemove: additional fields to strip (e.g. "model","stream" for AWS SDK path)
+func SanitizeBedrockRequestBody(rawBody []byte, extraFieldsToRemove ...string) ([]byte, error) {
 	var payload map[string]interface{}
 	if err := common.Unmarshal(rawBody, &payload); err != nil {
 		return nil, err
 	}
 	sanitizeBedrockThinking(payload)
 	for _, field := range bedrockUnsupportedTopLevelFields {
+		delete(payload, field)
+	}
+	for _, field := range extraFieldsToRemove {
 		delete(payload, field)
 	}
 	SanitizeBedrockPromptCachingScope(payload)
