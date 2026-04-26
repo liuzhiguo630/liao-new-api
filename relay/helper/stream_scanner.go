@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	InitialScannerBufferSize    = 64 << 10 // 64KB (64*1024)
-	DefaultMaxScannerBufferSize = 64 << 20 // 64MB (64*1024*1024) default SSE buffer size
+	InitialScannerBufferSize    = 64 << 10  // 64KB (64*1024)
+	DefaultMaxScannerBufferSize = 128 << 20 // 128MB default SSE buffer size
 	DefaultPingInterval         = 10 * time.Second
 )
 
@@ -40,8 +40,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		return
 	}
 
-	// 无条件新建 StreamStatus
-	info.StreamStatus = relaycommon.NewStreamStatus()
+	if info.StreamStatus == nil {
+		info.StreamStatus = relaycommon.NewStreamStatus()
+	}
 
 	// 确保响应体总是被关闭
 	defer func() {
@@ -57,6 +58,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		scanner    = bufio.NewScanner(resp.Body)
 		ticker     = time.NewTicker(streamingTimeout)
 		pingTicker *time.Ticker
+		isFinished bool
 		writeMutex sync.Mutex     // Mutex to protect concurrent writes
 		wg         sync.WaitGroup // 用于等待所有 goroutine 退出
 	)
@@ -83,6 +85,11 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 	// 改进资源清理，确保所有 goroutine 正确退出
 	defer func() {
+		// 标记处理结束，防止后续写入
+		writeMutex.Lock()
+		isFinished = true
+		writeMutex.Unlock()
+
 		// 通知所有 goroutine 停止
 		common.SafeSendBool(stopChan, true)
 
@@ -140,32 +147,22 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			for {
 				select {
 				case <-pingTicker.C:
-					// 使用超时机制防止写操作阻塞
-					done := make(chan error, 1)
-					gopool.Go(func() {
-						writeMutex.Lock()
-						defer writeMutex.Unlock()
-						done <- PingData(c)
-					})
-
-					select {
-					case err := <-done:
-						if err != nil {
-							logger.LogError(c, "ping data error: "+err.Error())
-							info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonPingFail, err)
-							return
-						}
-						if common.DebugEnabled {
-							println("ping data sent")
-						}
-					case <-time.After(10 * time.Second):
-						logger.LogError(c, "ping data send timeout")
-						info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonPingFail, fmt.Errorf("ping send timeout"))
+					if !writeMutex.TryLock() {
+						continue
+					}
+					if isFinished {
+						writeMutex.Unlock()
 						return
-					case <-ctx.Done():
+					}
+					err := PingData(c)
+					writeMutex.Unlock()
+					if err != nil {
+						logger.LogError(c, "ping data error: "+err.Error())
+						info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonPingFail, err)
 						return
-					case <-stopChan:
-						return
+					}
+					if common.DebugEnabled {
+						println("ping data sent")
 					}
 				case <-ctx.Done():
 					return

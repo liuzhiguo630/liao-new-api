@@ -18,6 +18,7 @@ import (
 
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
+	IdStr            string `json:"idStr" gorm:"-"`
 	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
 	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
 	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
@@ -241,10 +242,12 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		RequestId: requestId,
 		Other:     otherStr,
 	}
-	err := LOG_DB.Create(log).Error
-	if err != nil {
-		logger.LogError(c, "failed to record log: "+err.Error())
-	}
+	go func() {
+		err := LOG_DB.Create(log).Error
+		if err != nil {
+			logger.LogError(c, "failed to record log: "+err.Error())
+		}
+	}()
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
@@ -341,6 +344,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		if log.ChannelId != 0 {
 			channelIds.Add(log.ChannelId)
 		}
+		log.IdStr = fmt.Sprintf("%d", log.Id)
 	}
 
 	if channelIds.Len() > 0 {
@@ -381,6 +385,19 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
+// sanitizeLogLikePattern 根据日志数据库类型，选择合适的 LIKE 模式处理方式。
+// ClickHouse 不支持 LIKE ... ESCAPE 语法，需单独处理。
+func sanitizeLogLikePattern(input string) (pattern string, cond string, err error) {
+	if common.LogSqlType == common.DatabaseTypeClickHouse {
+		pattern, err = sanitizeLikePatternNoEscape(input)
+		cond = "LIKE ?"
+	} else {
+		pattern, err = sanitizeLikePattern(input)
+		cond = "LIKE ? ESCAPE '!'"
+	}
+	return
+}
+
 func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
@@ -390,11 +407,11 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
+		modelNamePattern, likeOp, err := sanitizeLogLikePattern(modelName)
 		if err != nil {
 			return nil, 0, err
 		}
-		tx = tx.Where("logs.model_name LIKE ? ESCAPE '!'", modelNamePattern)
+		tx = tx.Where("logs.model_name "+likeOp, modelNamePattern)
 	}
 	if tokenName != "" {
 		tx = tx.Where("logs.token_name = ?", tokenName)
@@ -453,12 +470,12 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where("created_at <= ?", endTimestamp)
 	}
 	if modelName != "" {
-		modelNamePattern, err := sanitizeLikePattern(modelName)
+		modelNamePattern, likeOp, err := sanitizeLogLikePattern(modelName)
 		if err != nil {
 			return stat, err
 		}
-		tx = tx.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
-		rpmTpmQuery = rpmTpmQuery.Where("model_name LIKE ? ESCAPE '!'", modelNamePattern)
+		tx = tx.Where("model_name "+likeOp, modelNamePattern)
+		rpmTpmQuery = rpmTpmQuery.Where("model_name "+likeOp, modelNamePattern)
 	}
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)

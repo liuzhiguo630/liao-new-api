@@ -450,34 +450,23 @@ func startPingKeepAlive(c *gin.Context, pingInterval time.Duration) context.Canc
 }
 
 func sendPingData(c *gin.Context, mutex *sync.Mutex) error {
-	// 增加超时控制，防止锁死等待
-	done := make(chan error, 1)
-	go func() {
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		err := helper.PingData(c)
-		if err != nil {
-			logger.LogError(c, "SSE ping error: "+err.Error())
-			done <- err
-			return
-		}
-
-		if common2.DebugEnabled {
-			println("SSE ping data sent.")
-		}
-		done <- nil
-	}()
-
-	// 设置发送ping数据的超时时间
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(10 * time.Second):
-		return errors.New("SSE ping data send timeout")
-	case <-c.Request.Context().Done():
-		return errors.New("request context cancelled during ping")
+	if !mutex.TryLock() {
+		// Another writer holds the lock (e.g. data handler); skip this ping
+		// to avoid spawning a goroutine that blocks indefinitely on Lock().
+		return nil
 	}
+	defer mutex.Unlock()
+
+	err := helper.PingData(c)
+	if err != nil {
+		logger.LogError(c, "SSE ping error: "+err.Error())
+		return err
+	}
+
+	if common2.DebugEnabled {
+		println("SSE ping data sent.")
+	}
+	return nil
 }
 
 func DoRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {

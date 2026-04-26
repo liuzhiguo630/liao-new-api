@@ -7,6 +7,7 @@ import (
 	"math"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -176,6 +177,86 @@ func getImageToken(c *gin.Context, fileMeta *types.FileMeta, model string, strea
 	}
 
 	return tiles*tileTokens + baseTokens, nil
+}
+
+// liao 需要的适配，相比旧版有改动
+func CountTokenChatRequest(c *gin.Context, request dto.GeneralOpenAIRequest, model string) (int, error) {
+	tkm := 0
+	stream := request.Stream != nil && *request.Stream
+	msgTokens, err := CountTokenMessages(c, request.Messages, model, stream)
+	if err != nil {
+		return 0, err
+	}
+	tkm += msgTokens
+	if request.Tools != nil {
+		countStr := ""
+		for _, tool := range request.Tools {
+			countStr = fmt.Sprintf("%v", tool)
+		}
+		toolTokens := CountTokenInput(countStr, model)
+		tkm += 8
+		tkm += toolTokens
+	}
+
+	return tkm, nil
+}
+
+// liao 需要的适配，相比旧版有改动
+func CountTokenMessages(c *gin.Context, messages []dto.Message, model string, stream bool) (int, error) {
+	tokenEncoder := getTokenEncoder(model)
+	var tokensPerMessage int
+	var tokensPerName int
+	if model == "gpt-3.5-turbo-0301" {
+		tokensPerMessage = 4
+		tokensPerName = -1
+	} else {
+		tokensPerMessage = 3
+		tokensPerName = 1
+	}
+	tokenNum := 0
+	messageLength := 0
+	start := time.Now().UnixMilli()
+	for _, message := range messages {
+		tokenNum += tokensPerMessage
+		tokenNum += getTokenNum(tokenEncoder, message.Role)
+		if message.Content != nil {
+			if message.IsStringContent() {
+				stringContent := message.StringContent()
+				messageLength += len(stringContent)
+				tokenNum += getTokenNum(tokenEncoder, stringContent)
+				if message.Name != nil {
+					tokenNum += tokensPerName
+					tokenNum += getTokenNum(tokenEncoder, *message.Name)
+				}
+			} else {
+				arrayContent := message.ParseContent()
+				for _, m := range arrayContent {
+					if m.Type == "image_url" {
+						imageUrl := m.GetImageMedia()
+						if imageUrl == nil || imageUrl.Url == "" {
+							continue
+						}
+						fileMeta := types.NewImageFileMeta(
+							types.NewFileSourceFromData(imageUrl.Url, imageUrl.MimeType),
+							imageUrl.Detail,
+						)
+						imageTokenNum, err := getImageToken(c, fileMeta, model, stream)
+						if err != nil {
+							return 0, err
+						}
+						tokenNum += imageTokenNum
+						log.Printf("image token num: %d", imageTokenNum)
+					} else {
+						tokenNum += getTokenNum(tokenEncoder, m.Text)
+						messageLength += len(m.Text)
+					}
+				}
+			}
+		}
+	}
+	tokenNum += 3
+	log.Printf("token encode elasped %vms, model: %v, tokenNum: %v, messageLength: %v \n", time.Now().UnixMilli()-start, model, tokenNum, messageLength)
+	return tokenNum, nil
 }
 
 func EstimateRequestToken(c *gin.Context, meta *types.TokenCountMeta, info *relaycommon.RelayInfo) (int, error) {

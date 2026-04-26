@@ -163,7 +163,8 @@ func chooseDB(envName string, isLog bool) (*gorm.DB, error) {
 			common.LogSqlType = common.DatabaseTypeMySQL
 		}
 		return gorm.Open(mysql.Open(dsn), &gorm.Config{
-			PrepareStmt: true, // precompile SQL
+			PrepareStmt:            false, // precompile SQL
+			SkipDefaultTransaction: true,
 		})
 	}
 	// Use SQLite
@@ -221,7 +222,12 @@ func InitLogDB() (err error) {
 			db = db.Debug()
 		}
 		LOG_DB = db
-		// If log DB is MySQL, also ensure Chinese-capable charset
+		// Allow explicitly specifying the log DB type via LOG_DB_TYPE env var.
+		// Must be set AFTER chooseDB, which overwrites LogSqlType based on DSN format.
+		// ClickHouse uses the MySQL wire protocol so its DSN looks like a MySQL DSN.
+		if strings.ToLower(os.Getenv("LOG_DB_TYPE")) == common.DatabaseTypeClickHouse {
+			common.LogSqlType = common.DatabaseTypeClickHouse
+		}
 		if common.LogSqlType == common.DatabaseTypeMySQL {
 			if err := checkMySQLChineseSupport(LOG_DB); err != nil {
 				panic(err)
@@ -238,8 +244,10 @@ func InitLogDB() (err error) {
 		if !common.IsMasterNode {
 			return nil
 		}
-		common.SysLog("database migration started")
-		err = migrateLOGDB()
+		if common.LogSqlType != common.DatabaseTypeClickHouse {
+			common.SysLog("database migration started")
+			err = migrateLOGDB()
+		}
 		return err
 	} else {
 		common.FatalLog(err)

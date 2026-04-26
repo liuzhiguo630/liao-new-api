@@ -68,7 +68,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
 	var (
 		newAPIError *types.NewAPIError
@@ -87,8 +87,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	defer func() {
 		if newAPIError != nil {
-			logger.LogError(c, fmt.Sprintf("relay error: %s", newAPIError.Error()))
-			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
+			shortErrorMsg := newAPIError.Error()
+			if len(shortErrorMsg) > 500 {
+				shortErrorMsg = shortErrorMsg[:500]
+			}
+			logger.LogError(c, fmt.Sprintf("relay error: %s", shortErrorMsg))
+			newAPIError.SetMessage(common.MessageWithRequestId(shortErrorMsg, requestId))
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())
@@ -227,9 +231,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
 
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+		shouldRetryBool := shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry())
+		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), originalModel, newAPIError, shouldRetryBool)
 
-		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
+		if !shouldRetryBool {
+			logger.LogError(c, fmt.Sprintf("relay bodyError (originalModel %s, url:%s): %s", originalModel, c.Request.URL.String(), newAPIError.Error()))
 			break
 		}
 	}
@@ -338,6 +344,12 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if code >= 200 && code < 300 {
 		return false
 	}
+	// Bedrock may return 400 for channel/account-level invoke failures
+	// such as model access denial. Those failures should fall through to
+	// the next channel instead of terminating the whole retry chain.
+	if code == http.StatusBadRequest && openaiErr.GetErrorCode() == types.ErrorCodeAwsInvokeError {
+		return true
+	}
 	if code < 100 || code > 599 {
 		return true
 	}
@@ -347,8 +359,9 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
-	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, err.Error()))
+// liao 需要的适配，调用成功和失败时添加更详细的日志
+func processChannelError(c *gin.Context, channelError types.ChannelError, originalModel string, err *types.NewAPIError, retryBool bool) {
+	logger.LogError(c, fmt.Sprintf("relay error (channel #%d, originalModel %s, status code: %d, retry:%v): %s", channelError.ChannelId, originalModel, err.StatusCode, retryBool, err.Error()))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
 	if service.ShouldDisableChannel(err) && channelError.AutoBan {
@@ -549,7 +562,9 @@ func RelayTask(c *gin.Context) {
 			processChannelError(c,
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
-				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+				relayInfo.OriginModelName,
+				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode),
+				false)
 		}
 
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry()) {

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/relay/channel/claude"
 )
 
 type AwsClaudeRequest struct {
@@ -30,21 +31,41 @@ type AwsClaudeRequest struct {
 	//Metadata         json.RawMessage     `json:"metadata,omitempty"`
 }
 
-func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
-	var awsClaudeRequest AwsClaudeRequest
-	err := common.DecodeJson(requestBody, &awsClaudeRequest)
+func formatRequest(requestBody io.Reader, requestHeader http.Header, filterBedrockBeta bool) (*AwsClaudeRequest, error) {
+	rawBody, err := io.ReadAll(requestBody)
 	if err != nil {
+		return nil, err
+	}
+	body := rawBody
+	if filterBedrockBeta {
+		body, err = claude.SanitizeBedrockPromptCachingBytes(rawBody)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var awsClaudeRequest AwsClaudeRequest
+	if err := common.Unmarshal(body, &awsClaudeRequest); err != nil {
 		return nil, err
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
 
-	// check header anthropic-beta
+	// Bedrock rejects budget_tokens when thinking.type != "enabled"
+	if awsClaudeRequest.Thinking != nil && awsClaudeRequest.Thinking.Type != "enabled" {
+		awsClaudeRequest.Thinking.BudgetTokens = nil
+	}
+
 	anthropicBetaValues := requestHeader.Get("anthropic-beta")
 	if len(anthropicBetaValues) > 0 {
-		var tempArray []string
-		tempArray = strings.Split(anthropicBetaValues, ",")
-		if len(tempArray) > 0 {
-			betaJson, err := json.Marshal(tempArray)
+		rawFlags := strings.Split(anthropicBetaValues, ",")
+		var filtered []string
+		for _, flag := range rawFlags {
+			flag = strings.TrimSpace(flag)
+			if flag != "" && claude.BedrockSupportedBeta[flag] {
+				filtered = append(filtered, flag)
+			}
+		}
+		if len(filtered) > 0 {
+			betaJson, err := json.Marshal(filtered)
 			if err != nil {
 				return nil, err
 			}

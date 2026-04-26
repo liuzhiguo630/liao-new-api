@@ -52,6 +52,62 @@ func trimModelThinking(modelName string) string {
 	return modelName
 }
 
+func geminiRequestNeedsNativeNormalization(request *dto.GeminiChatRequest) bool {
+	if request == nil {
+		return false
+	}
+
+	if len(request.Contents) > 0 && request.Contents[0].Role == "" {
+		return true
+	}
+
+	for _, content := range request.Contents {
+		for _, part := range content.Parts {
+			if part.FileData != nil &&
+				part.FileData.MimeType == "" &&
+				strings.Contains(part.FileData.FileUri, "www.youtube.com") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func canReuseOriginalGeminiBody(info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) bool {
+	if info == nil || request == nil {
+		return false
+	}
+
+	// Only reuse the original request body for native Gemini upstreams.
+	if info.ApiType != constant.APITypeGemini {
+		return false
+	}
+
+	// Any override means we must rebuild the JSON body.
+	if len(info.ParamOverride) > 0 {
+		return false
+	}
+
+	// System prompt injection mutates the request body.
+	if info.ChannelSetting.SystemPrompt != "" {
+		return false
+	}
+
+	// Thinking adaptor mutates Gemini generation config when it is absent.
+	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled &&
+		request.GenerationConfig.ThinkingConfig == nil {
+		return false
+	}
+
+	// Native Gemini adaptor may still normalize some request fields.
+	if geminiRequestNeedsNativeNormalization(request) {
+		return false
+	}
+
+	return true
+}
+
 func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
 
@@ -60,9 +116,13 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected *dto.GeminiChatRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 
-	request, err := common.DeepCopy(geminiReq)
-	if err != nil {
-		return types.NewError(fmt.Errorf("failed to copy request to GeminiChatRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	reuseOriginalBody := canReuseOriginalGeminiBody(info, geminiReq)
+	request := geminiReq
+	var err error
+	if !reuseOriginalBody {
+		// Lightweight copy: shares Contents/InlineData (read-only in relay)
+		// to avoid duplicating large base64 payloads (~42% heap reduction per pprof).
+		request = geminiReq.ShallowCopyForRelay()
 	}
 
 	// model mapped 模型映射
@@ -137,7 +197,7 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	}
 
 	var requestBody io.Reader
-	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
+	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled || reuseOriginalBody {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
@@ -145,6 +205,19 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		requestBody = common.ReaderOnly(storage)
 	} else {
 		// 使用 ConvertGeminiRequest 转换请求格式
+		if len(info.ParamOverride) > 0 {
+			if info.ParamOverride["minThink"] != nil {
+				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
+				if budget != nil && info.IsStream {
+					if request.GenerationConfig.ThinkingConfig == nil {
+						request.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
+							ThinkingBudget: common.GetPointer(int(budget.(float64))),
+						}
+					}
+				}
+			}
+			delete(info.ParamOverride, "minThink")
+		}
 		convertedRequest, err := adaptor.ConvertGeminiRequest(c, info, request)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -162,8 +235,6 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 				return newAPIErrorFromParamOverride(err)
 			}
 		}
-
-		logger.LogDebug(c, "Gemini request body: "+string(jsonData))
 
 		requestBody = bytes.NewReader(jsonData)
 	}
@@ -262,7 +333,6 @@ func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo) (newAPI
 			return newAPIErrorFromParamOverride(err)
 		}
 	}
-	logger.LogDebug(c, "Gemini embedding request body: "+string(jsonData))
 	requestBody = bytes.NewReader(jsonData)
 
 	resp, err := adaptor.DoRequest(c, info, requestBody)

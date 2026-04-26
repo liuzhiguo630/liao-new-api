@@ -137,7 +137,7 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 		a.AwsReq = awsReq
 		return nil, nil
 	} else {
-		awsClaudeReq, err := formatRequest(requestBody, requestHeader)
+		awsClaudeReq, err := formatRequest(requestBody, requestHeader, info.ChannelOtherSettings.FilterBedrockBeta)
 		if err != nil {
 			return nil, types.NewError(errors.Wrap(err, "format aws request fail"), types.ErrorCodeBadRequestBody)
 		}
@@ -171,25 +171,35 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 }
 
 // buildAwsRequestBody prepares the payload for AWS requests, applying passthrough rules when enabled.
+// All paths go through SanitizeBedrockRequestBody to strip fields Bedrock does not accept
+// (thinking.budget_tokens when disabled, unsupported top-level fields, cache_control.scope).
 func buildAwsRequestBody(c *gin.Context, info *relaycommon.RelayInfo, awsClaudeReq any) ([]byte, error) {
+	var body []byte
+	var err error
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
 		if err != nil {
 			return nil, errors.Wrap(err, "get request body for pass-through fail")
 		}
-		body, err := storage.Bytes()
+		body, err = storage.Bytes()
 		if err != nil {
 			return nil, errors.Wrap(err, "get request body bytes fail")
 		}
-		var data map[string]interface{}
-		if err := common.Unmarshal(body, &data); err != nil {
-			return nil, errors.Wrap(err, "pass-through unmarshal request body fail")
+	} else {
+		body, err = common.Marshal(awsClaudeReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "marshal aws request fail")
 		}
-		delete(data, "model")
-		delete(data, "stream")
-		return common.Marshal(data)
 	}
-	return common.Marshal(awsClaudeReq)
+	body, err = claude.SanitizeBedrockRequestBody(body,
+		"model", "stream", "metadata", "service_tier", "inference_geo")
+	if err != nil {
+		return nil, err
+	}
+	if info.ChannelOtherSettings.FilterBedrockBeta {
+		return claude.SanitizeBedrockPromptCachingBytes(body)
+	}
+	return body, nil
 }
 
 func getAwsRegionPrefix(awsRegionId string) string {
