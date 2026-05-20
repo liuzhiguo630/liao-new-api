@@ -3,12 +3,11 @@ package dto
 import "github.com/QuantumNous/new-api/types"
 
 const (
-	RealtimeEventTypeError               = "error"
-	RealtimeEventTypeSessionUpdate       = "session.update"
-	RealtimeEventTypeConversationCreate  = "conversation.item.create"
-	RealtimeEventTypeResponseCreate      = "response.create"
-	RealtimeEventInputAudioBufferAppend  = "input_audio_buffer.append"
-	RealtimeEventSessionInputAudioAppend = "session.input_audio_buffer.append"
+	RealtimeEventTypeError              = "error"
+	RealtimeEventTypeSessionUpdate      = "session.update"
+	RealtimeEventTypeConversationCreate = "conversation.item.create"
+	RealtimeEventTypeResponseCreate     = "response.create"
+	RealtimeEventInputAudioBufferAppend = "input_audio_buffer.append"
 )
 
 const (
@@ -16,14 +15,10 @@ const (
 	RealtimeEventTypeSessionUpdated                 = "session.updated"
 	RealtimeEventTypeSessionCreated                 = "session.created"
 	RealtimeEventResponseAudioDelta                 = "response.audio.delta"
-	RealtimeEventSessionOutputAudioDelta            = "session.output_audio.delta"
 	RealtimeEventResponseAudioTranscriptionDelta    = "response.audio_transcript.delta"
-	RealtimeEventSessionOutputTranscriptDelta       = "session.output_transcript.delta"
-	RealtimeEventSessionInputTranscriptDelta        = "session.input_transcript.delta"
 	RealtimeEventResponseFunctionCallArgumentsDelta = "response.function_call_arguments.delta"
 	RealtimeEventResponseFunctionCallArgumentsDone  = "response.function_call_arguments.done"
 	RealtimeEventConversationItemCreated            = "conversation.item.created"
-	RealtimeEventSessionClosed                      = "session.closed"
 )
 
 type RealtimeEvent struct {
