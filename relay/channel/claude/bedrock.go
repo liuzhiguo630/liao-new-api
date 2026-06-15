@@ -42,10 +42,20 @@ var bedrockUnsupportedTopLevelFields = []string{
 	"container", "mcp_servers",
 }
 
+// bedrockUnsupportedToolFields are per-tool definition fields that first-party
+// Anthropic accepts but Bedrock rejects with "Extra inputs are not permitted"
+// (loc: tools[].custom.<field>). Claude clients (e.g. Claude Code) set these on
+// custom tools; we strip them from every entry of the top-level "tools" array.
+//   - eager_input_streaming: opt-in for fine-grained tool streaming, Anthropic-only
+var bedrockUnsupportedToolFields = []string{
+	"eager_input_streaming",
+}
+
 // SanitizeBedrockRequestBody removes/fixes fields in the request body that are
 // incompatible with the AWS Bedrock Claude API:
 //   - Removes budget_tokens from thinking when type != "enabled" (Bedrock rejects extra fields)
 //   - Removes top-level fields that Bedrock does not support
+//   - Removes per-tool fields that Bedrock does not support (e.g. eager_input_streaming)
 //   - extraFieldsToRemove: additional fields to strip (e.g. "model","stream" for AWS SDK path)
 func SanitizeBedrockRequestBody(rawBody []byte, extraFieldsToRemove ...string) ([]byte, error) {
 	var payload map[string]interface{}
@@ -53,6 +63,7 @@ func SanitizeBedrockRequestBody(rawBody []byte, extraFieldsToRemove ...string) (
 		return nil, err
 	}
 	sanitizeBedrockThinking(payload)
+	sanitizeBedrockTools(payload)
 	for _, field := range bedrockUnsupportedTopLevelFields {
 		delete(payload, field)
 	}
@@ -76,5 +87,29 @@ func sanitizeBedrockThinking(data map[string]interface{}) {
 	thinkingType, _ := thinking["type"].(string)
 	if thinkingType != "enabled" {
 		delete(thinking, "budget_tokens")
+	}
+}
+
+// sanitizeBedrockTools removes per-tool fields that Bedrock does not accept from
+// each entry of the top-level "tools" array. Bedrock validates custom tools against
+// a stricter schema than first-party Anthropic and rejects unknown fields such as
+// eager_input_streaming (fine-grained tool streaming) with a 400 ValidationException.
+func sanitizeBedrockTools(data map[string]interface{}) {
+	toolsRaw, ok := data["tools"]
+	if !ok {
+		return
+	}
+	tools, ok := toolsRaw.([]interface{})
+	if !ok {
+		return
+	}
+	for _, toolRaw := range tools {
+		tool, ok := toolRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, field := range bedrockUnsupportedToolFields {
+			delete(tool, field)
+		}
 	}
 }

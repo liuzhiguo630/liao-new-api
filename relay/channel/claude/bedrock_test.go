@@ -218,3 +218,52 @@ func TestSanitizeBedrockRequestBody_NoThinking(t *testing.T) {
 		t.Fatalf("expected no thinking field, got %s", string(sanitized))
 	}
 }
+
+func TestSanitizeBedrockRequestBody_StripsToolEagerInputStreaming(t *testing.T) {
+	body := `{
+		"model": "claude-haiku-4-5",
+		"messages": [{"role": "user", "content": "hi"}],
+		"tools": [
+			{
+				"name": "get_weather",
+				"description": "Get weather",
+				"eager_input_streaming": true,
+				"input_schema": {"type": "object", "properties": {"city": {"type": "string"}}}
+			},
+			{
+				"type": "bash_20250124",
+				"name": "bash"
+			}
+		]
+	}`
+
+	sanitized, err := SanitizeBedrockRequestBody([]byte(body))
+	if err != nil {
+		t.Fatalf("SanitizeBedrockRequestBody error: %v", err)
+	}
+	s := string(sanitized)
+	if strings.Contains(s, "eager_input_streaming") {
+		t.Errorf("expected eager_input_streaming to be removed, got %s", s)
+	}
+	// Other tool fields and the tools array itself must be preserved.
+	for _, keep := range []string{"get_weather", "input_schema", "bash_20250124"} {
+		if !strings.Contains(s, keep) {
+			t.Errorf("expected %s to be preserved, got %s", keep, s)
+		}
+	}
+}
+
+func TestSanitizeBedrockRequestBody_NoTools(t *testing.T) {
+	body := `{
+		"messages": [{"role": "user", "content": "hi"}],
+		"max_tokens": 1024
+	}`
+
+	sanitized, err := SanitizeBedrockRequestBody([]byte(body))
+	if err != nil {
+		t.Fatalf("SanitizeBedrockRequestBody error: %v", err)
+	}
+	if !strings.Contains(string(sanitized), "messages") {
+		t.Fatalf("expected messages to be preserved, got %s", string(sanitized))
+	}
+}
