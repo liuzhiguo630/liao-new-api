@@ -90,26 +90,36 @@ func sanitizeBedrockThinking(data map[string]interface{}) {
 	}
 }
 
-// sanitizeBedrockTools removes per-tool fields that Bedrock does not accept from
-// each entry of the top-level "tools" array. Bedrock validates custom tools against
-// a stricter schema than first-party Anthropic and rejects unknown fields such as
-// eager_input_streaming (fine-grained tool streaming) with a 400 ValidationException.
+// sanitizeBedrockTools removes tool-definition fields that Bedrock does not accept
+// (e.g. eager_input_streaming for fine-grained tool streaming). Bedrock validates
+// custom tools against a stricter schema than first-party Anthropic and rejects
+// unknown fields with a 400 ValidationException (loc: tools[].custom.eager_input_streaming).
+//
+// The removal recurses *within the tools subtree only*, because clients place these
+// fields in different shapes — flat on the tool object, or nested under the tool's
+// "custom" object — and we cannot assume the exact depth. Recursion is scoped to
+// "tools" (not the whole request) since these are exclusively tool-definition fields;
+// this avoids walking the large messages history and keeps the cost bounded.
 func sanitizeBedrockTools(data map[string]interface{}) {
 	toolsRaw, ok := data["tools"]
 	if !ok {
 		return
 	}
-	tools, ok := toolsRaw.([]interface{})
-	if !ok {
-		return
-	}
-	for _, toolRaw := range tools {
-		tool, ok := toolRaw.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	removeBedrockUnsupportedToolFields(toolsRaw)
+}
+
+func removeBedrockUnsupportedToolFields(value interface{}) {
+	switch v := value.(type) {
+	case map[string]interface{}:
 		for _, field := range bedrockUnsupportedToolFields {
-			delete(tool, field)
+			delete(v, field)
+		}
+		for _, child := range v {
+			removeBedrockUnsupportedToolFields(child)
+		}
+	case []interface{}:
+		for _, child := range v {
+			removeBedrockUnsupportedToolFields(child)
 		}
 	}
 }

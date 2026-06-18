@@ -253,6 +253,32 @@ func TestSanitizeBedrockRequestBody_StripsToolEagerInputStreaming(t *testing.T) 
 	}
 }
 
+func TestSanitizeBedrockRequestBody_StripsNestedEagerInputStreaming(t *testing.T) {
+	// eager_input_streaming nested under a tool's "custom" object must be removed by
+	// the recursive sweep within the tools subtree (loc: tools[].custom.eager_input_streaming).
+	body := `{
+		"model": "claude-sonnet-4-5-20250929",
+		"messages": [{"role": "user", "content": "hi"}],
+		"tools": [
+			{"type": "custom", "custom": {"name": "Bash", "input_schema": {"type": "object"}, "eager_input_streaming": true}}
+		]
+	}`
+
+	sanitized, err := SanitizeBedrockRequestBody([]byte(body))
+	if err != nil {
+		t.Fatalf("SanitizeBedrockRequestBody error: %v", err)
+	}
+	s := string(sanitized)
+	if strings.Contains(s, "eager_input_streaming") {
+		t.Errorf("expected all eager_input_streaming occurrences removed, got %s", s)
+	}
+	for _, keep := range []string{"Bash", "input_schema", "messages"} {
+		if !strings.Contains(s, keep) {
+			t.Errorf("expected %s to be preserved, got %s", keep, s)
+		}
+	}
+}
+
 func TestSanitizeBedrockRequestBody_NoTools(t *testing.T) {
 	body := `{
 		"messages": [{"role": "user", "content": "hi"}],
