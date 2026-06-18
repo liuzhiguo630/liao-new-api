@@ -23,15 +23,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// diagEagerLeak is a TEMPORARY diagnostic. It fires only for channel 7789 and only
-// when the final outgoing body STILL contains eager_input_streaming after sanitize,
-// logging which path built the body, whether the FilterBedrockBeta gate was on, and a
-// ~150-char window around the field (tool definition area, never the conversation).
-// Used to find why the strip is bypassed; remove once the root cause is confirmed.
+// diagEagerLeak is a TEMPORARY diagnostic. It fires only when the final outgoing body
+// STILL contains eager_input_streaming, logging the channel, which handler/path built
+// the body, whether the FilterBedrockBeta gate was on, and a ~150-char window around
+// the field (tool definition area, never the conversation). Used to find which path
+// bypasses the strip; remove once the root cause is confirmed.
 func diagEagerLeak(c *gin.Context, info *relaycommon.RelayInfo, path string, body []byte) {
-	if info.ChannelId != 7789 {
-		return
-	}
 	idx := bytes.Index(body, []byte("eager_input_streaming"))
 	if idx < 0 {
 		return

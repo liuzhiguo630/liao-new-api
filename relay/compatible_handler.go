@@ -149,6 +149,9 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 				println("requestBody: ", string(debugBytes))
 			}
 		}
+		if b, bErr := storage.Bytes(); bErr == nil {
+			diagEagerLeak(c, info, "compat-passthrough", b)
+		}
 		requestBody = common.ReaderOnly(storage)
 	} else {
 		convertedRequest, err := adaptor.ConvertOpenAIRequest(c, info, request)
@@ -218,6 +221,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			}
 		}
 
+		diagEagerLeak(c, info, "compat-converted", jsonData)
 		requestBody = bytes.NewBuffer(jsonData)
 	}
 
