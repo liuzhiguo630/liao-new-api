@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -294,6 +295,26 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	}
 	if common2.DebugEnabled {
 		println("fullRequestURL:", fullRequestURL)
+	}
+	// TEMP [EAGER-WIRE]: at the single network chokepoint, capture the actual outgoing
+	// body for Claude (type=14) channels when it still carries eager_input_streaming,
+	// no matter which handler/branch built it. Logs upstream URL + a small context
+	// window (tool area only). Remove once root cause is confirmed.
+	if info.ChannelType == 14 && requestBody != nil {
+		wireBytes, _ := io.ReadAll(requestBody)
+		if idx := bytes.Index(wireBytes, []byte("eager_input_streaming")); idx >= 0 {
+			start := idx - 60
+			if start < 0 {
+				start = 0
+			}
+			end := idx + 90
+			if end > len(wireBytes) {
+				end = len(wireBytes)
+			}
+			logger.LogError(c, fmt.Sprintf("[EAGER-WIRE] ch=%d type=%d url=%s ctx=%q",
+				info.ChannelId, info.ChannelType, fullRequestURL, string(wireBytes[start:end])))
+		}
+		requestBody = bytes.NewReader(wireBytes)
 	}
 	req, err := http.NewRequest(c.Request.Method, fullRequestURL, requestBody)
 	if err != nil {
