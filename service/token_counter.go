@@ -6,7 +6,6 @@ import (
 	"math"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
@@ -212,15 +211,12 @@ func CountTokenMessages(c *gin.Context, messages []dto.Message, model string, st
 		tokensPerName = 1
 	}
 	tokenNum := 0
-	messageLength := 0
-	start := time.Now().UnixMilli()
 	for _, message := range messages {
 		tokenNum += tokensPerMessage
 		tokenNum += getTokenNum(tokenEncoder, message.Role)
 		if message.Content != nil {
 			if message.IsStringContent() {
 				stringContent := message.StringContent()
-				messageLength += len(stringContent)
 				tokenNum += getTokenNum(tokenEncoder, stringContent)
 				if message.Name != nil {
 					tokenNum += tokensPerName
@@ -243,17 +239,14 @@ func CountTokenMessages(c *gin.Context, messages []dto.Message, model string, st
 							return 0, err
 						}
 						tokenNum += imageTokenNum
-						log.Printf("image token num: %d", imageTokenNum)
 					} else {
 						tokenNum += getTokenNum(tokenEncoder, m.Text)
-						messageLength += len(m.Text)
 					}
 				}
 			}
 		}
 	}
 	tokenNum += 3
-	log.Printf("token encode elasped %vms, model: %v, tokenNum: %v, messageLength: %v \n", time.Now().UnixMilli()-start, model, tokenNum, messageLength)
 	return tokenNum, nil
 }
 
