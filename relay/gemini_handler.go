@@ -203,20 +203,6 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		}
 		requestBody = common.ReaderOnly(storage)
 	} else {
-		// liao 需要的适配：渠道 param_override 里的 minThink 按模型给流式请求补 thinkingBudget
-		if len(info.ParamOverride) > 0 {
-			if info.ParamOverride["minThink"] != nil {
-				budget := info.ParamOverride["minThink"].(map[string]interface{})[info.OriginModelName]
-				if budget != nil && info.IsStream {
-					if request.GenerationConfig.ThinkingConfig == nil {
-						request.GenerationConfig.ThinkingConfig = &dto.GeminiThinkingConfig{
-							ThinkingBudget: common.GetPointer(int(budget.(float64))),
-						}
-					}
-				}
-			}
-			delete(info.ParamOverride, "minThink")
-		}
 		// 使用 ConvertGeminiRequest 转换请求格式
 		convertedRequest, err := adaptor.ConvertGeminiRequest(c, info, request)
 		if err != nil {
