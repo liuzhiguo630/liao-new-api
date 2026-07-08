@@ -44,9 +44,9 @@ func (r *GeminiChatRequest) UnmarshalJSON(data []byte) error {
 }
 
 type ToolConfig struct {
-	FunctionCallingConfig            *FunctionCallingConfig `json:"functionCallingConfig,omitempty"`
-	RetrievalConfig                  *RetrievalConfig       `json:"retrievalConfig,omitempty"`
-	IncludeServerSideToolInvocations *bool                  `json:"includeServerSideToolInvocations,omitempty"`
+	FunctionCallingConfig *FunctionCallingConfig `json:"functionCallingConfig,omitempty"`
+	RetrievalConfig       *RetrievalConfig       `json:"retrievalConfig,omitempty"`
+	IncludeServerSideToolInvocations *bool       `json:"includeServerSideToolInvocations,omitempty"`
 }
 
 type FunctionCallingConfig struct {
@@ -157,6 +157,35 @@ func (r *GeminiChatRequest) SetTools(tools []GeminiChatTool) {
 		return
 	}
 	r.Tools = data
+}
+
+// ShallowCopyForRelay creates a lightweight copy suitable for relay processing.
+// It shares slices (Contents, SafetySettings, Tools, Requests) with the original
+// to avoid duplicating large InlineData payloads (~42% of heap per pprof).
+// Only fields that may be mutated during relay (SystemInstructions, GenerationConfig)
+// are independently copied.
+//
+// CONTRACT: callers must NOT mutate shared fields (Contents, SafetySettings, Tools).
+func (r *GeminiChatRequest) ShallowCopyForRelay() *GeminiChatRequest {
+	cp := *r // shallow struct copy — slices/pointers shared
+	// GenerationConfig is a value type; the struct copy already gave us an independent copy.
+	// But ThinkingConfig is a pointer inside it, deep-copy it so mutations don't leak back.
+	if r.GenerationConfig.ThinkingConfig != nil {
+		tc := *r.GenerationConfig.ThinkingConfig
+		if tc.ThinkingBudget != nil {
+			b := *tc.ThinkingBudget
+			tc.ThinkingBudget = &b
+		}
+		cp.GenerationConfig.ThinkingConfig = &tc
+	}
+	// SystemInstructions may be appended/modified; give it its own slice.
+	if r.SystemInstructions != nil {
+		si := *r.SystemInstructions
+		si.Parts = make([]GeminiPart, len(r.SystemInstructions.Parts))
+		copy(si.Parts, r.SystemInstructions.Parts)
+		cp.SystemInstructions = &si
+	}
+	return &cp
 }
 
 type GeminiThinkingConfig struct {
@@ -311,35 +340,6 @@ func (p *GeminiPart) UnmarshalJSON(data []byte) error {
 type GeminiChatContent struct {
 	Role  string       `json:"role,omitempty"`
 	Parts []GeminiPart `json:"parts"`
-}
-
-// ShallowCopyForRelay creates a lightweight copy suitable for relay processing.
-// It shares slices (Contents, SafetySettings, Tools, Requests) with the original
-// to avoid duplicating large InlineData payloads (~42% of heap per pprof).
-// Only fields that may be mutated during relay (SystemInstructions, GenerationConfig)
-// are independently copied.
-//
-// CONTRACT: callers must NOT mutate shared fields (Contents, SafetySettings, Tools).
-func (r *GeminiChatRequest) ShallowCopyForRelay() *GeminiChatRequest {
-	cp := *r // shallow struct copy — slices/pointers shared
-	// GenerationConfig is a value type; the struct copy already gave us an independent copy.
-	// But ThinkingConfig is a pointer inside it, deep-copy it so mutations don't leak back.
-	if r.GenerationConfig.ThinkingConfig != nil {
-		tc := *r.GenerationConfig.ThinkingConfig
-		if tc.ThinkingBudget != nil {
-			b := *tc.ThinkingBudget
-			tc.ThinkingBudget = &b
-		}
-		cp.GenerationConfig.ThinkingConfig = &tc
-	}
-	// SystemInstructions may be appended/modified; give it its own slice.
-	if r.SystemInstructions != nil {
-		si := *r.SystemInstructions
-		si.Parts = make([]GeminiPart, len(r.SystemInstructions.Parts))
-		copy(si.Parts, r.SystemInstructions.Parts)
-		cp.SystemInstructions = &si
-	}
-	return &cp
 }
 
 type GeminiChatSafetySettings struct {

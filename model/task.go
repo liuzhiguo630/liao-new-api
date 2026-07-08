@@ -104,6 +104,7 @@ type TaskPrivateData struct {
 	BillingSource  string              `json:"billing_source,omitempty"`  // "wallet" 或 "subscription"
 	SubscriptionId int                 `json:"subscription_id,omitempty"` // 订阅 ID，用于订阅退款
 	TokenId        int                 `json:"token_id,omitempty"`        // 令牌 ID，用于令牌额度退款
+	NodeName       string              `json:"node_name,omitempty"`       // 发起任务的节点名，轮询结算阶段据此归属日志而非最后查询节点
 	BillingContext *TaskBillingContext `json:"billing_context,omitempty"` // 计费参数快照（用于轮询阶段重新计算）
 }
 
@@ -314,6 +315,21 @@ func GetAllUnFinishSyncTasks(limit int) []*Task {
 	return tasks
 }
 
+// HasUnfinishedSyncTasks reports whether at least one async (Suno/video) task is
+// still in progress. It is a cheap existence check (LIMIT 1) used to decide
+// whether the async_task_poll system task needs to run; when no task is pending
+// the scheduler skips creating a row entirely.
+func HasUnfinishedSyncTasks() bool {
+	var id int64
+	err := DB.Model(&Task{}).
+		Where("progress != ?", "100%").
+		Where("status != ?", TaskStatusFailure).
+		Where("status != ?", TaskStatusSuccess).
+		Limit(1).
+		Pluck("id", &id).Error
+	return err == nil && id != 0
+}
+
 func GetByOnlyTaskId(taskId string) (*Task, bool, error) {
 	if taskId == "" {
 		return nil, false, nil
@@ -401,6 +417,10 @@ func (Task *Task) Update() error {
 	return err
 }
 
+func (t *Task) UpdateQuota() error {
+	return DB.Model(t).Update("quota", t.Quota).Error
+}
+
 // UpdateWithStatus performs a conditional UPDATE guarded by fromStatus (CAS).
 // Returns (true, nil) if this caller won the update, (false, nil) if
 // another process already moved the task out of fromStatus.
@@ -414,6 +434,17 @@ func (t *Task) UpdateWithStatus(fromStatus TaskStatus) (bool, error) {
 		return false, result.Error
 	}
 	return result.RowsAffected > 0, nil
+}
+
+// TaskBulkUpdate performs an unconditional bulk UPDATE by upstream task_id strings.
+// Same caveats as TaskBulkUpdateByID — no CAS guard.
+func TaskBulkUpdate(taskIds []string, params map[string]any) error {
+	if len(taskIds) == 0 {
+		return nil
+	}
+	return DB.Model(&Task{}).
+		Where("task_id in (?)", taskIds).
+		Updates(params).Error
 }
 
 // TaskBulkUpdateByID performs an unconditional bulk UPDATE by primary key IDs.

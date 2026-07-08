@@ -1,7 +1,6 @@
 package relay
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -44,7 +43,6 @@ func TokenCounterHelper(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"prompt_tokens": promptTokens,
 	})
-
 }
 
 func getPromptTokens(c *gin.Context, textRequest *dto.GeneralOpenAIRequest, info *relaycommon.RelayInfo) (int, error) {
@@ -146,7 +144,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		}
 		if common.DebugEnabled {
 			if debugBytes, bErr := storage.Bytes(); bErr == nil {
-				println("requestBody: ", string(debugBytes))
+				logger.LogDebug(c, "requestBody: %s", debugBytes)
 			}
 		}
 		requestBody = common.ReaderOnly(storage)
@@ -218,7 +216,16 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			}
 		}
 
-		requestBody = bytes.NewBuffer(jsonData)
+		logger.LogDebug(c, "text request body: %s", jsonData)
+
+		body, size, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
+		}
+		defer closer.Close()
+		jsonData = nil
+		info.UpstreamRequestBodySize = size
+		requestBody = body
 	}
 
 	var httpResp *http.Response

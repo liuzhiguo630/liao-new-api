@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -87,11 +88,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	defer func() {
 		if newAPIError != nil {
+			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
+			// liao 需要的适配：截断返回给客户端的超长上游错误
 			shortErrorMsg := newAPIError.Error()
 			if len(shortErrorMsg) > 500 {
 				shortErrorMsg = shortErrorMsg[:500]
 			}
-			logger.LogError(c, fmt.Sprintf("relay error: %s", shortErrorMsg))
 			newAPIError.SetMessage(common.MessageWithRequestId(shortErrorMsg, requestId))
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
@@ -182,10 +184,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
-		ModelName:  relayInfo.OriginModelName,
-		Retry:      common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
@@ -244,6 +247,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))
 		logger.LogInfo(c, retryLogStr)
+	}
+	if newAPIError != nil {
+		gopool.Go(func() {
+			perfmetrics.RecordRelaySample(relayInfo, false, 0)
+		})
 	}
 }
 
@@ -344,13 +352,13 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if code >= 200 && code < 300 {
 		return false
 	}
+	if code < 100 || code > 599 {
+		return true
+	}
 	// Bedrock may return 400 for channel/account-level invoke failures
 	// such as model access denial. Those failures should fall through to
 	// the next channel instead of terminating the whole retry chain.
 	if code == http.StatusBadRequest && openaiErr.GetErrorCode() == types.ErrorCodeAwsInvokeError {
-		return true
-	}
-	if code < 100 || code > 599 {
 		return true
 	}
 	if operation_setting.IsAlwaysSkipRetryCode(openaiErr.GetErrorCode()) {
@@ -361,7 +369,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 
 // liao 需要的适配，调用成功和失败时添加更详细的日志
 func processChannelError(c *gin.Context, channelError types.ChannelError, originalModel string, err *types.NewAPIError, retryBool bool) {
-	logger.LogError(c, fmt.Sprintf("relay error (channel #%d, originalModel %s, status code: %d, retry:%v): %s", channelError.ChannelId, originalModel, err.StatusCode, retryBool, err.Error()))
+	logger.LogError(c, fmt.Sprintf("relay error (channel #%d, originalModel %s, status code: %d, retry:%v): %s", channelError.ChannelId, originalModel, err.StatusCode, retryBool, common.LocalLogPreview(err.Error())))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
 	if service.ShouldDisableChannel(err) && channelError.AutoBan {
@@ -514,10 +522,11 @@ func RelayTask(c *gin.Context) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
-		ModelName:  relayInfo.OriginModelName,
-		Retry:      common.GetPointer(0),
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
@@ -590,11 +599,12 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
+		task.PrivateData.NodeName = common.NodeName
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      relayInfo.PriceData.ModelPrice,
 			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 			ModelRatio:      relayInfo.PriceData.ModelRatio,
-			OtherRatios:     relayInfo.PriceData.OtherRatios,
+			OtherRatios:     relayInfo.PriceData.OtherRatios(),
 			OriginModelName: relayInfo.OriginModelName,
 			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		}
