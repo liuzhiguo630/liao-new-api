@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
 	channelclaude "github.com/QuantumNous/new-api/relay/channel/claude"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -22,28 +21,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// diagEagerLeak is a TEMPORARY diagnostic. It fires only when the final outgoing body
-// STILL contains eager_input_streaming, logging the channel, which handler/path built
-// the body, whether the FilterBedrockBeta gate was on, and a ~150-char window around
-// the field (tool definition area, never the conversation). Used to find which path
-// bypasses the strip; remove once the root cause is confirmed.
-func diagEagerLeak(c *gin.Context, info *relaycommon.RelayInfo, path string, body []byte) {
-	idx := bytes.Index(body, []byte("eager_input_streaming"))
-	if idx < 0 {
-		return
-	}
-	start := idx - 60
-	if start < 0 {
-		start = 0
-	}
-	end := idx + 90
-	if end > len(body) {
-		end = len(body)
-	}
-	logger.LogError(c, fmt.Sprintf("[EAGER-DIAG] ch=%d path=%s filterBeta=%v ctx=%q",
-		info.ChannelId, path, info.ChannelOtherSettings.FilterBedrockBeta, string(body[start:end])))
-}
 
 func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 
@@ -185,7 +162,6 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 				return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 			}
 		}
-		diagEagerLeak(c, info, "passthrough", body)
 		requestBody = bytes.NewBuffer(body)
 	} else {
 		convertedRequest, err := adaptor.ConvertClaudeRequest(c, info, request)
@@ -221,7 +197,6 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		if common.DebugEnabled {
 			println("requestBody: ", string(jsonData))
 		}
-		diagEagerLeak(c, info, "converted", jsonData)
 		requestBody = bytes.NewBuffer(jsonData)
 	}
 
