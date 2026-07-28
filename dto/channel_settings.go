@@ -13,16 +13,7 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
-	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
-	// Accepted values: "", "auto" (default), "http1".
-	// Use "http1" to force HTTP/1.1 and avoid upstream HTTP/2 GOAWAY under load.
-	HTTPProtocol string `json:"http_protocol,omitempty"`
 }
-
-const (
-	HTTPProtocolAuto  = "auto"
-	HTTPProtocolHTTP1 = "http1"
-)
 
 type VertexKeyType string
 

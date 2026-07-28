@@ -2,17 +2,14 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
 	"golang.org/x/net/proxy"
@@ -20,7 +17,6 @@ import (
 
 var (
 	httpClient              *http.Client
-	http1Client             *http.Client
 	ssrfProtectedHTTPClient *http.Client
 	proxyClientLock         sync.Mutex
 	proxyClients            = make(map[string]*http.Client)
@@ -57,58 +53,30 @@ func ValidateSSRFProtectedFetchURL(urlStr string) error {
 	return validateURLWithCurrentFetchSetting(urlStr, true)
 }
 
-// applyHTTP1Force disables automatic HTTP/2 on a never-used transport.
-// ForceAttemptHTTP2=false alone is insufficient; a non-nil empty TLSNextProto
-// map prevents net/http from wiring HTTP/2.
-func applyHTTP1Force(transport *http.Transport) {
-	if transport == nil {
-		return
-	}
-	transport.ForceAttemptHTTP2 = false
-	transport.DisableKeepAlives = false
-	transport.TLSNextProto = make(map[string]func(authority string, c *tls.Conn) http.RoundTripper)
-	if transport.TLSClientConfig != nil {
-		cfg := transport.TLSClientConfig.Clone()
-		cfg.NextProtos = nil
-		transport.TLSClientConfig = cfg
-	}
-}
-
-func newBaseTransport(forceHTTP1 bool) *http.Transport {
+func InitHttpClient() {
 	transport := &http.Transport{
 		MaxIdleConns:        common.RelayMaxIdleConns,
 		MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
 		IdleConnTimeout:     time.Duration(common.RelayIdleConnTimeout) * time.Second,
 		ForceAttemptHTTP2:   true,
-		Proxy:               http.ProxyFromEnvironment,
+		Proxy:               http.ProxyFromEnvironment, // Support HTTP_PROXY, HTTPS_PROXY, NO_PROXY env vars
 	}
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig
 	}
-	if forceHTTP1 {
-		applyHTTP1Force(transport)
-	}
-	return transport
-}
 
-func newRelayClient(transport http.RoundTripper) *http.Client {
-	client := &http.Client{
-		Transport:     transport,
-		CheckRedirect: checkRedirect,
+	if common.RelayTimeout == 0 {
+		httpClient = &http.Client{
+			Transport:     transport,
+			CheckRedirect: checkRedirect,
+		}
+	} else {
+		httpClient = &http.Client{
+			Transport:     transport,
+			Timeout:       time.Duration(common.RelayTimeout) * time.Second,
+			CheckRedirect: checkRedirect,
+		}
 	}
-	if common.RelayTimeout != 0 {
-		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
-	}
-	return client
-}
-
-func channelWantsHTTP1(settings dto.ChannelSettings) bool {
-	return strings.EqualFold(strings.TrimSpace(settings.HTTPProtocol), dto.HTTPProtocolHTTP1)
-}
-
-func InitHttpClient() {
-	httpClient = newRelayClient(newBaseTransport(false))
-	http1Client = newRelayClient(newBaseTransport(true))
 	ssrfProtectedHTTPClient = newProtectedFetchHTTPClient()
 }
 
@@ -120,14 +88,6 @@ func InitHttpClient() {
 // user-controlled URLs must use GetSSRFProtectedHTTPClient or
 // ValidateSSRFProtectedFetchURL instead.
 func GetHttpClient() *http.Client {
-	return httpClient
-}
-
-// GetHttpClientForChannel returns the outbound client for a channel's transport policy.
-func GetHttpClientForChannel(settings dto.ChannelSettings) *http.Client {
-	if channelWantsHTTP1(settings) {
-		return http1Client
-	}
 	return httpClient
 }
 
@@ -148,14 +108,6 @@ func GetHttpClientWithProxy(proxyURL string) (*http.Client, error) {
 	return NewProxyHttpClient(proxyURL)
 }
 
-// GetHttpClientWithProxySettings returns a client that respects channel proxy and http_protocol.
-func GetHttpClientWithProxySettings(proxyURL string, settings dto.ChannelSettings) (*http.Client, error) {
-	if proxyURL == "" {
-		return GetHttpClientForChannel(settings), nil
-	}
-	return NewProxyHttpClientWithProtocol(proxyURL, channelWantsHTTP1(settings))
-}
-
 // ResetProxyClientCache 清空代理客户端缓存，确保下次使用时重新初始化
 func ResetProxyClientCache() {
 	proxyClientLock.Lock()
@@ -168,33 +120,17 @@ func ResetProxyClientCache() {
 	proxyClients = make(map[string]*http.Client)
 }
 
-func proxyCacheKey(proxyURL string, forceHTTP1 bool) string {
-	if forceHTTP1 {
-		return proxyURL + "\x00http1"
-	}
-	return proxyURL + "\x00auto"
-}
-
 // NewProxyHttpClient 创建支持代理的 HTTP 客户端
 func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
-	return NewProxyHttpClientWithProtocol(proxyURL, false)
-}
-
-// NewProxyHttpClientWithProtocol creates a proxy client, optionally forcing HTTP/1.1.
-func NewProxyHttpClientWithProtocol(proxyURL string, forceHTTP1 bool) (*http.Client, error) {
 	if proxyURL == "" {
-		if forceHTTP1 {
-			return http1Client, nil
-		}
 		if client := GetHttpClient(); client != nil {
 			return client, nil
 		}
 		return http.DefaultClient, nil
 	}
 
-	cacheKey := proxyCacheKey(proxyURL, forceHTTP1)
 	proxyClientLock.Lock()
-	if client, ok := proxyClients[cacheKey]; ok {
+	if client, ok := proxyClients[proxyURL]; ok {
 		proxyClientLock.Unlock()
 		return client, nil
 	}
@@ -217,16 +153,18 @@ func NewProxyHttpClientWithProtocol(proxyURL string, forceHTTP1 bool) (*http.Cli
 		if common.TLSInsecureSkipVerify {
 			transport.TLSClientConfig = common.InsecureTLSConfig
 		}
-		if forceHTTP1 {
-			applyHTTP1Force(transport)
+		client := &http.Client{
+			Transport:     transport,
+			CheckRedirect: checkRedirect,
 		}
-		client := newRelayClient(transport)
+		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
 		proxyClientLock.Lock()
-		proxyClients[cacheKey] = client
+		proxyClients[proxyURL] = client
 		proxyClientLock.Unlock()
 		return client, nil
 
 	case "socks5", "socks5h":
+		// 获取认证信息
 		var auth *proxy.Auth
 		if parsedURL.User != nil {
 			auth = &proxy.Auth{
@@ -238,6 +176,8 @@ func NewProxyHttpClientWithProtocol(proxyURL string, forceHTTP1 bool) (*http.Cli
 			}
 		}
 
+		// 创建 SOCKS5 代理拨号器
+		// proxy.SOCKS5 使用 tcp 参数，所有 TCP 连接包括 DNS 查询都将通过代理进行。行为与 socks5h 相同
 		dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, auth, proxy.Direct)
 		if err != nil {
 			return nil, err
@@ -255,13 +195,11 @@ func NewProxyHttpClientWithProtocol(proxyURL string, forceHTTP1 bool) (*http.Cli
 		if common.TLSInsecureSkipVerify {
 			transport.TLSClientConfig = common.InsecureTLSConfig
 		}
-		if forceHTTP1 {
-			applyHTTP1Force(transport)
-		}
 
-		client := newRelayClient(transport)
+		client := &http.Client{Transport: transport, CheckRedirect: checkRedirect}
+		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
 		proxyClientLock.Lock()
-		proxyClients[cacheKey] = client
+		proxyClients[proxyURL] = client
 		proxyClientLock.Unlock()
 		return client, nil
 
