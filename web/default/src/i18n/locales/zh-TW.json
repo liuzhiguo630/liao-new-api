@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "將請求體直接傳遞給上游",
     "Pass specified request headers to upstream": "把指定請求頭透傳到上游請求",
     "Pass Through Body": "透傳請求體",
+    "Force HTTP/1.1": "強制 HTTP/1.1",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "讓每個上游請求獨佔一條連線。當上游傳送 HTTP/2 GOAWAY 截斷進行中的串流時啟用",
     "Pass Through Headers": "請求頭透傳",
     "Pass through the anthropic-beta header for beta features": "透傳 anthropic-beta 標頭以使用 beta 功能",
     "Pass through the include field for usage obfuscation": "透傳 include 欄位以用於用量混淆",

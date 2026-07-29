@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "Передать тело запроса напрямую вышестоящему серверу",
     "Pass specified request headers to upstream": "Передать указанные заголовки запроса вышестоящему серверу",
     "Pass Through Body": "Передача тела запроса",
+    "Force HTTP/1.1": "Принудительно HTTP/1.1",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "Выделять отдельное соединение для каждого запроса к вышестоящему сервису. Включите, если вышестоящий сервис отправляет HTTP/2 GOAWAY и обрывает активные потоки",
     "Pass Through Headers": "Передать заголовки",
     "Pass through the anthropic-beta header for beta features": "Проброс заголовка anthropic-beta для бета-функций",
     "Pass through the include field for usage obfuscation": "Проброс поля include для обфускации использования",

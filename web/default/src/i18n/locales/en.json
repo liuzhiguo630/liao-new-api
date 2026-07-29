@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "Pass request body directly to upstream",
     "Pass specified request headers to upstream": "Pass specified request headers to upstream",
     "Pass Through Body": "Pass Through Body",
+    "Force HTTP/1.1": "Force HTTP/1.1",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams",
     "Pass Through Headers": "Pass Through Headers",
     "Pass through the anthropic-beta header for beta features": "Pass through the anthropic-beta header for beta features",
     "Pass through the include field for usage obfuscation": "Pass through the include field for usage obfuscation",

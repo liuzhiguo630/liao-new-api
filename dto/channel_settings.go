@@ -13,6 +13,10 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	// ForceHTTP1 强制该渠道的上游请求走 HTTP/1.1。用于上游会对长寿命 HTTP/2 连接发
+	// GOAWAY 的场景：h2 下一条连接承载几十条并发流，GOAWAY 会把在途流全部截断；
+	// h1.1 下每个请求独占一条 TCP，影响面收敛到单个请求。
+	ForceHTTP1 bool `json:"force_http1,omitempty"`
 }
 
 type VertexKeyType string

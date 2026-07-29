@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "Truyền phần thân yêu cầu trực tiếp lên upstream",
     "Pass specified request headers to upstream": "Chuyển tiếp header yêu cầu chỉ định lên upstream",
     "Pass Through Body": "Xuyên qua cơ thể",
+    "Force HTTP/1.1": "Buộc dùng HTTP/1.1",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "Cấp cho mỗi yêu cầu tới thượng nguồn một kết nối riêng. Bật khi thượng nguồn gửi HTTP/2 GOAWAY và làm gián đoạn các luồng đang chạy",
     "Pass Through Headers": "Truyền header qua",
     "Pass through the anthropic-beta header for beta features": "Chuyển tiếp header anthropic-beta cho tính năng beta",
     "Pass through the include field for usage obfuscation": "Chuyển tiếp trường include cho che giấu sử dụng",

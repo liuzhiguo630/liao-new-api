@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 
 var (
 	httpClient              *http.Client
+	http1Client             *http.Client
 	ssrfProtectedHTTPClient *http.Client
 	proxyClientLock         sync.Mutex
 	proxyClients            = make(map[string]*http.Client)
@@ -53,30 +55,50 @@ func ValidateSSRFProtectedFetchURL(urlStr string) error {
 	return validateURLWithCurrentFetchSetting(urlStr, true)
 }
 
-func InitHttpClient() {
+// newRelayTransport builds the outbound relay transport. When forceHTTP1 is set,
+// ALPN is restricted to http/1.1 so each upstream request gets its own TCP
+// connection instead of sharing HTTP/2 streams on one long-lived connection.
+func newRelayTransport(forceHTTP1 bool) *http.Transport {
 	transport := &http.Transport{
 		MaxIdleConns:        common.RelayMaxIdleConns,
 		MaxIdleConnsPerHost: common.RelayMaxIdleConnsPerHost,
 		IdleConnTimeout:     time.Duration(common.RelayIdleConnTimeout) * time.Second,
-		ForceAttemptHTTP2:   true,
+		ForceAttemptHTTP2:   !forceHTTP1,
 		Proxy:               http.ProxyFromEnvironment, // Support HTTP_PROXY, HTTPS_PROXY, NO_PROXY env vars
 	}
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig
 	}
-
-	if common.RelayTimeout == 0 {
-		httpClient = &http.Client{
-			Transport:     transport,
-			CheckRedirect: checkRedirect,
+	if forceHTTP1 {
+		// ForceAttemptHTTP2=false alone is not enough: net/http still wires up
+		// HTTP/2 automatically while TLSNextProto is nil. A non-nil empty map is
+		// what actually disables the upgrade.
+		transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+		tlsConfig := &tls.Config{}
+		if transport.TLSClientConfig != nil {
+			// InsecureTLSConfig is shared process-wide; never mutate it in place.
+			tlsConfig = transport.TLSClientConfig.Clone()
 		}
-	} else {
-		httpClient = &http.Client{
-			Transport:     transport,
-			Timeout:       time.Duration(common.RelayTimeout) * time.Second,
-			CheckRedirect: checkRedirect,
-		}
+		tlsConfig.NextProtos = []string{"http/1.1"}
+		transport.TLSClientConfig = tlsConfig
 	}
+	return transport
+}
+
+func newRelayClient(transport *http.Transport) *http.Client {
+	client := &http.Client{
+		Transport:     transport,
+		CheckRedirect: checkRedirect,
+	}
+	if common.RelayTimeout != 0 {
+		client.Timeout = time.Duration(common.RelayTimeout) * time.Second
+	}
+	return client
+}
+
+func InitHttpClient() {
+	httpClient = newRelayClient(newRelayTransport(false))
+	http1Client = newRelayClient(newRelayTransport(true))
 	ssrfProtectedHTTPClient = newProtectedFetchHTTPClient()
 }
 
@@ -89,6 +111,12 @@ func InitHttpClient() {
 // ValidateSSRFProtectedFetchURL instead.
 func GetHttpClient() *http.Client {
 	return httpClient
+}
+
+// GetHTTP1Client returns the outbound client pinned to HTTP/1.1, used by channels
+// with ForceHTTP1 enabled. See newRelayTransport for why a channel would want it.
+func GetHTTP1Client() *http.Client {
+	return http1Client
 }
 
 // GetSSRFProtectedHTTPClient 返回带拨号时 SSRF 校验的客户端。

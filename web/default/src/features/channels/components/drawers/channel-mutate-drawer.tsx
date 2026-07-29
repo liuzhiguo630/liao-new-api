@@ -280,6 +280,7 @@ const SENSITIVE_FORM_FIELDS = [
   'pass_through_body_enabled',
   'system_prompt',
   'system_prompt_override',
+  'force_http1',
   'allow_service_tier',
   'disable_store',
   'allow_safety_identifier',
@@ -332,6 +333,7 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.thinking_to_content ||
     values.pass_through_body_enabled ||
     values.system_prompt_override ||
+    values.force_http1 ||
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
     values.upstream_model_update_auto_sync_enabled ||
@@ -3991,6 +3993,31 @@ export function ChannelMutateDrawer({
                                       <FormDescription>
                                         {t(
                                           'Pass request body directly to upstream'
+                                        )}
+                                      </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                      <Switch
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name='force_http1'
+                                render={({ field }) => (
+                                  <FormItem className='flex items-center justify-between px-4 py-3'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel>
+                                        {t('Force HTTP/1.1')}
+                                      </FormLabel>
+                                      <FormDescription>
+                                        {t(
+                                          'Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams'
                                         )}
                                       </FormDescription>
                                     </div>

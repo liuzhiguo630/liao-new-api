@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "リクエストボディを直接アップストリームに渡す",
     "Pass specified request headers to upstream": "指定のリクエストヘッダーを上流に透過",
     "Pass Through Body": "ボディをパススルー",
+    "Force HTTP/1.1": "HTTP/1.1 を強制",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "各アップストリームリクエストに専用の接続を割り当てます。アップストリームが HTTP/2 GOAWAY を送信して進行中のストリームを中断する場合に有効化してください",
     "Pass Through Headers": "ヘッダー透過",
     "Pass through the anthropic-beta header for beta features": "ベータ機能用に anthropic-beta ヘッダーをパススルー",
     "Pass through the include field for usage obfuscation": "使用量難読化用に include フィールドをパススルー",

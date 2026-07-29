@@ -3160,6 +3160,8 @@
     "Pass request body directly to upstream": "Transmettre le corps de la requête directement à l'upstream",
     "Pass specified request headers to upstream": "Transmettre les en-têtes de requête spécifiés en amont",
     "Pass Through Body": "Corps de transmission directe",
+    "Force HTTP/1.1": "Forcer HTTP/1.1",
+    "Give each upstream request its own connection. Enable when the upstream sends HTTP/2 GOAWAY and truncates in-flight streams": "Attribuer à chaque requête amont sa propre connexion. À activer lorsque l'amont envoie un GOAWAY HTTP/2 et tronque les flux en cours",
     "Pass Through Headers": "Transmettre les en-têtes",
     "Pass through the anthropic-beta header for beta features": "Transmettre l'en-tête anthropic-beta pour les fonctionnalités bêta",
     "Pass through the include field for usage obfuscation": "Transmettre le champ include pour l'obfuscation d'utilisation",
